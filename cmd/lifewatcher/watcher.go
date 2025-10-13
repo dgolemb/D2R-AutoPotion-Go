@@ -30,6 +30,12 @@ type Manager struct {
 	lastMercHeal  time.Time
 	lastDebugMsg  time.Time
 	Timer         time.Time
+	// indexes for cycling through multiple binding keys
+	hpIndex    int
+	manaIndex  int
+	rejuvIndex int
+	mercHpIndex int
+	mercRejuvIndex int
 }
 
 type ExperienceCalc struct {
@@ -148,7 +154,7 @@ func (w *Watcher) Start(ctx context.Context, manager *Manager, XP *ExperienceCal
 
 				usedRejuv := false
 				if time.Since(manager.lastRejuv) > (time.Duration(config.Config.Timings.RejuvInterval)*time.Second) && (d.PlayerUnit.HPPercent() <= config.Config.Health.RejuvPotionAtLife || d.PlayerUnit.MPPercent() < config.Config.Health.RejuvPotionAtMana) {
-					UseRejuv()
+					UseRejuv(manager)
 					usedRejuv := true
 					if usedRejuv {
 						manager.lastRejuv = time.Now()
@@ -159,13 +165,13 @@ func (w *Watcher) Start(ctx context.Context, manager *Manager, XP *ExperienceCal
 				if !usedRejuv {
 
 					if d.PlayerUnit.HPPercent() <= config.Config.Health.HealingPotionAt && time.Since(manager.lastHeal) > (time.Duration(healingInterval)*time.Second) {
-						UseHP()
+						UseHP(manager)
 						manager.lastHeal = time.Now()
 						speaker.Play(audioBufferL.Streamer(0, audioBufferL.Len()))
 					}
 
 					if d.PlayerUnit.MPPercent() <= config.Config.Health.ManaPotionAt && time.Since(manager.lastMana) > (time.Duration(config.Config.Timings.ManaInterval)*time.Second) {
-						UseMana()
+						UseMana(manager)
 						manager.lastMana = time.Now()
 						speaker.Play(audioBufferM.Streamer(0, audioBufferM.Len()))
 					}
@@ -175,7 +181,7 @@ func (w *Watcher) Start(ctx context.Context, manager *Manager, XP *ExperienceCal
 				if d.MercHPPercent() > 0 {
 					usedMercRejuv := false
 					if time.Since(manager.lastRejuvMerc) > (time.Duration(config.Config.Timings.RejuvInterval)*time.Second) && d.MercHPPercent() <= config.Config.Health.MercRejuvPotionAt {
-						UseMercRejuv()
+						UseMercRejuv(manager)
 						usedMercRejuv := true
 						if usedMercRejuv {
 							manager.lastRejuvMerc = time.Now()
@@ -186,7 +192,7 @@ func (w *Watcher) Start(ctx context.Context, manager *Manager, XP *ExperienceCal
 					if !usedMercRejuv {
 
 						if d.MercHPPercent() <= config.Config.Health.MercHealingPotionAt && time.Since(manager.lastMercHeal) > (time.Duration(config.Config.Timings.HealingMercInterval)*time.Second) {
-							UseHPMerc()
+							UseHPMerc(manager)
 							manager.lastMercHeal = time.Now()
 							speaker.Play(audioBufferL.Streamer(0, audioBufferL.Len()))
 						}
@@ -259,49 +265,80 @@ func getKey(key int) int {
 	}
 }
 
-func UseHP() {
+func UseHP(m *Manager) {
 	kb, err := keybd_event.NewKeyBonding()
 	if err != nil {
 	}
 	kb.HasSHIFT(false)
-	kb.SetKeys(getKey(config.Config.Bindings.PotionHP))
+	// get current key from list and advance index
+	keys := config.Config.Bindings.PotionHP
+	if len(keys) == 0 {
+		return
+	}
+	key := keys[m.hpIndex%len(keys)]
+	kb.SetKeys(getKey(key))
 	err = kb.Launching()
+	m.hpIndex = (m.hpIndex + 1) % len(keys)
 }
 
-func UseMana() {
+func UseMana(m *Manager) {
 	kb, err := keybd_event.NewKeyBonding()
 	if err != nil {
 	}
 	kb.HasSHIFT(false)
-	kb.SetKeys(getKey(config.Config.Bindings.PotionMANA))
+	keys := config.Config.Bindings.PotionMANA
+	if len(keys) == 0 {
+		return
+	}
+	key := keys[m.manaIndex%len(keys)]
+	kb.SetKeys(getKey(key))
 	err = kb.Launching()
+	m.manaIndex = (m.manaIndex + 1) % len(keys)
 }
 
-func UseHPMerc() {
+func UseHPMerc(m *Manager) {
 	kb, err := keybd_event.NewKeyBonding()
 	if err != nil {
 	}
 	kb.HasSHIFT(true)
-	kb.SetKeys(getKey(config.Config.Bindings.PotionHP))
+	keys := config.Config.Bindings.PotionHP
+	if len(keys) == 0 {
+		return
+	}
+	key := keys[m.mercHpIndex%len(keys)]
+	kb.SetKeys(getKey(key))
 	err = kb.Launching()
 	kb.HasSHIFT(false)
+	m.mercHpIndex = (m.mercHpIndex + 1) % len(keys)
 }
 
-func UseMercRejuv() {
+func UseMercRejuv(m *Manager) {
 	kb, err := keybd_event.NewKeyBonding()
 	if err != nil {
 	}
 	kb.HasSHIFT(true)
-	kb.SetKeys(getKey(config.Config.Bindings.PotionREJUV))
+	keys := config.Config.Bindings.PotionREJUV
+	if len(keys) == 0 {
+		return
+	}
+	key := keys[m.mercRejuvIndex%len(keys)]
+	kb.SetKeys(getKey(key))
 	err = kb.Launching()
 	kb.HasSHIFT(false)
+	m.mercRejuvIndex = (m.mercRejuvIndex + 1) % len(keys)
 }
 
-func UseRejuv() {
+func UseRejuv(m *Manager) {
 	kb, err := keybd_event.NewKeyBonding()
 	if err != nil {
 	}
 	kb.HasSHIFT(false)
-	kb.SetKeys(getKey(config.Config.Bindings.PotionREJUV))
+	keys := config.Config.Bindings.PotionREJUV
+	if len(keys) == 0 {
+		return
+	}
+	key := keys[m.rejuvIndex%len(keys)]
+	kb.SetKeys(getKey(key))
 	err = kb.Launching()
+	m.rejuvIndex = (m.rejuvIndex + 1) % len(keys)
 }

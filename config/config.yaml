@@ -7,6 +7,7 @@ health: # Healing configuration, all values in %
   mercRejuvPotionAt: 20
 
 bindings: # Hotkey configuration for potions
+  # You can provide a single number or a list. Example: potionHP: [1, 2]
   potionHP: 1
   potionMANA: 4
   potionREJUV: 2
