@@ -1,6 +1,6 @@
 health: # Healing configuration, all values in %
-  healingPotionAt: 80
-  manaPotionAt: 60
+  healingPotionAt: 70
+  manaPotionAt: 20
   rejuvPotionAtLife: 40
   rejuvPotionAtMana: 40
   mercHealingPotionAt: 60
@@ -8,9 +8,9 @@ health: # Healing configuration, all values in %
 
 bindings: # Hotkey configuration for potions
   # You can provide a single number or a list. Example: potionHP: [1, 2]
-  potionHP: 1
-  potionMANA: 4
-  potionREJUV: 2
+  potionHP: [1,2]
+  potionMANA: [3,4]
+  #potionREJUV: 2
 
 timings: # Delay time beetween actions (seconds)
   rejuvInterval: 1
