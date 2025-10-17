@@ -44,9 +44,11 @@ func main() {
 		log.Println(err)
 	}
 	var cmd *exec.Cmd
-	cmd = exec.Command(path + "\\gui.exe")
+	//cmd = exec.Command(path + "\\gui.exe") // zakomentowane - bez GUI
 
 	hello := widget.NewLabel("Diablo 2 Ressurrected AutoPotion")
+	
+	// ➕ Dodaj nowe przyciski testowe
 	w.SetContent(container.NewVBox(
 		hello,
 		widget.NewButton("Start", func() {
@@ -62,20 +64,55 @@ func main() {
 
 				watcher := lifewatcher.NewWatcher(gr)
 
-				if cmd.Process == nil {
-					cmd = exec.Command(path + "\\gui.exe")
-					cmd.Start()
-				}
-				if cmd.Process != nil {
-					cmd.Process.Kill()
-					cmd = exec.Command(path + "\\gui.exe")
-					cmd.Start()
-				}
+				// GUI zakomentowane
+				// if cmd.Process == nil {
+				// 	cmd = exec.Command(path + "\\gui.exe")
+				// 	cmd.Start()
+				// }
+				// if cmd.Process != nil {
+				// 	cmd.Process.Kill()
+				// 	cmd = exec.Command(path + "\\gui.exe")
+				// 	cmd.Start()
+				// }
+				
 				go StartWatcher(*watcher, ctx, &manager, &XP, audioBufferL, audioBufferM, audioBufferR, path)
 			}
 		}),
 		widget.NewButton("Reset", func() {
 			lifewatcher.ResetXPCalc(&XP)
+		}),
+		// ➕ Nowe przyciski debugowania
+		widget.NewSeparator(),
+		widget.NewLabel("--- Debug Tools ---"),
+		widget.NewButton("Debug Coordinates", func() {
+			process, err := memory.NewProcess()
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+				return
+			}
+			gr := memory.NewGameReader(process)
+			debugger := lifewatcher.NewCoordinateDebugger(gr)
+			debugger.DebugInventoryCoordinates()
+		}),
+		widget.NewButton("Test Mouse Movement", func() {
+			process, err := memory.NewProcess()
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+				return
+			}
+			gr := memory.NewGameReader(process)
+			debugger := lifewatcher.NewCoordinateDebugger(gr)
+			go debugger.TestMouseMovement()
+		}),
+		widget.NewButton("Test Click on Potion", func() {
+			process, err := memory.NewProcess()
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+				return
+			}
+			gr := memory.NewGameReader(process)
+			debugger := lifewatcher.NewCoordinateDebugger(gr)
+			go debugger.TestClickOnPotion()
 		}),
 	))
 
@@ -83,7 +120,7 @@ func main() {
 
 	defer func() {
 		fmt.Println("\ncleanup")
-		cmd.Process.Kill()
+		// cmd.Process.Kill() // zakomentowane
 	}()
 
 }

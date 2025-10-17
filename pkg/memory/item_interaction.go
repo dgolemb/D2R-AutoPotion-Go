@@ -124,3 +124,12 @@ func (ii *ItemInteraction) ShiftClickItemInInventory(itm data.Item) error {
 	screenX, screenY := ii.GridToScreenCoordinates(itm.Position)
 	return ii.SimulateShiftLeftClick(screenX, screenY)
 }
+
+// MoveMouse przesuwa kursor bez klikania (do testowania)
+func (ii *ItemInteraction) MoveMouse(x, y int) error {
+	user32 := windows.NewLazySystemDLL("user32.dll")
+	setCursorPos := user32.NewProc("SetCursorPos")
+	
+	setCursorPos.Call(uintptr(x), uintptr(y))
+	return nil
+}
