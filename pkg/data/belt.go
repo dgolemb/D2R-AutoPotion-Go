@@ -28,6 +28,38 @@ func (b Belt) GetFirstPotion(potionType PotionType) (Position, bool) {
 	return Position{}, false
 }
 
+// GetPotionCountInSlot zwraca ilość mikstur w danym slocie (kolumnie) paska
+func (b Belt) GetPotionCountInSlot(slotX int) int {
+	count := 0
+	for _, i := range b.Items {
+		if i.Position.X == slotX && i.Position.Y >= 0 {
+			count++
+		}
+	}
+	return count
+}
+
+// GetSlotsByPotionType zwraca listę slotów zawierających określony typ mikstury
+func (b Belt) GetSlotsByPotionType(potionType PotionType) []int {
+	slots := make(map[int]bool)
+	for _, i := range b.Items {
+		if strings.Contains(string(i.Name), string(potionType)) && i.Position.Y == 0 {
+			slots[i.Position.X] = true
+		}
+	}
+
+	result := make([]int, 0)
+	for slot := range slots {
+		result = append(result, slot)
+	}
+	return result
+}
+
+// NeedsRefill sprawdza czy slot potrzebuje uzupełnienia (mniej niż 2 mikstury)
+func (b Belt) NeedsRefill(slotX int) bool {
+	return b.GetPotionCountInSlot(slotX) < 2
+}
+
 func (b Belt) Rows() int {
 	switch b.Name {
 	case "":
