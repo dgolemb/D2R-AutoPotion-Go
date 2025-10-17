@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Hefero/D2R-AutoPotion-Go/pkg/data"
+	"github.com/Hefero/D2R-AutoPotion-Go/pkg/data/item"  // ✅ Dodaj import
 	"github.com/Hefero/D2R-AutoPotion-Go/pkg/memory"
 )
 
@@ -33,7 +34,7 @@ func (cd *CoordinateDebugger) DebugInventoryCoordinates() {
 	fmt.Println("Items in inventory:")
 
 	for i, itm := range d.Items.AllItems {
-		if itm.Location == data.item.LocationInventory {
+		if itm.Location == item.LocationInventory {  // ✅ Zmieniono z data.item na item
 			screenX, screenY := cd.interaction.GridToScreenCoordinates(itm.Position)
 			
 			potionType := "Other"
@@ -78,7 +79,7 @@ func (cd *CoordinateDebugger) TestClickOnPotion() error {
 	// Znajdź pierwszą miksturę HP w inventory
 	var testPotion *data.Item
 	for _, itm := range d.Items.AllItems {
-		if itm.Location == data.item.LocationInventory && itm.IsHealingPotion() {
+		if itm.Location == item.LocationInventory && itm.IsHealingPotion() {  // ✅ Zmieniono z data.item na item
 			testPotion = &itm
 			break
 		}
@@ -132,7 +133,7 @@ func (cd *CoordinateDebugger) TestMouseMovement() error {
 
 	count := 0
 	for _, itm := range d.Items.AllItems {
-		if itm.Location == data.item.LocationInventory && 
+		if itm.Location == item.LocationInventory &&  // ✅ Zmieniono z data.item na item
 		   (itm.IsHealingPotion() || itm.IsManaPotion()) {
 			
 			screenX, screenY := cd.interaction.GridToScreenCoordinates(itm.Position)
