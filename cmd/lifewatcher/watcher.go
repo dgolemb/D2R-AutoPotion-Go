@@ -20,6 +20,7 @@ import (
 
 type Watcher struct {
 	Gr *memory.GameReader
+	BeltRefiller *BeltRefiller
 }
 
 type Manager struct {
@@ -51,17 +52,28 @@ type ExperienceCalc struct {
 }
 
 func NewWatcher(gr *memory.GameReader) *Watcher {
-	return &Watcher{Gr: gr}
+	return &Watcher{
+		Gr:          gr,
+		BeltRefiller: NewBeltRefiller(gr),  // ➕ Dodaj to
+	}
 }
 
 func (w *Watcher) Start(ctx context.Context, manager *Manager, XP *ExperienceCalc, audioBufferL *beep.Buffer, audioBufferM *beep.Buffer, audioBufferR *beep.Buffer) error {
 
 	d, err := w.Gr.GetData()
 	if err != nil {
-		fmt.Printf("\r                                              ") //clean line
+		fmt.Printf("\r                                              ")
 		fmt.Printf("\rnot In Game\n")
 		fmt.Print("\033[A")
 		time.Sleep(1 * time.Second)
+	}
+	
+	// ➕ Dodaj sprawdzanie i uzupełnianie paska
+	if err == nil && !d.PlayerUnit.Area.IsTown() {
+		if refillErr := w.BeltRefiller.CheckAndRefillBelt(); refillErr != nil {
+			// Loguj błąd ale kontynuuj działanie
+			fmt.Printf("Belt refill error: %v\n", refillErr)
+		}
 	}
 	if err == nil {
 		if XP.FirstStart {
