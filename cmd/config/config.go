@@ -31,6 +31,11 @@ type StructConfig struct {
 		ManaInterval        float32 `yaml:"manaInterval"`
 		HealingMercInterval float32 `yaml:"healingMercInterval"`
 	} `yaml:"timings"`
+	BeltRefill struct {
+		Enabled          bool `yaml:"enabled"`
+		CheckInterval    int  `yaml:"checkInterval"`
+		MinPotionsInSlot int  `yaml:"minPotionsInSlot"`
+	} `yaml:"beltRefill"`
 }
 
 // IntList is a helper that unmarshals either a single int or a sequence of ints from YAML
