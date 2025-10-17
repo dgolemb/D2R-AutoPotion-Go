@@ -5,11 +5,12 @@ import (
 	"time"
 
 	"github.com/Hefero/D2R-AutoPotion-Go/pkg/data"
+	"github.com/Hefero/D2R-AutoPotion-Go/pkg/data/item"
 	"github.com/Hefero/D2R-AutoPotion-Go/pkg/memory"
 )
 
 type BeltRefiller struct {
-	gr          *GameReader
+	gr          *memory.GameReader  // ✅ Zmieniono z GameReader na *memory.GameReader
 	interaction *memory.ItemInteraction
 	lastRefill  time.Time
 }
@@ -120,23 +121,23 @@ func (br *BeltRefiller) refillSlot(slotX int, potionType data.PotionType, d *dat
 func (br *BeltRefiller) findPotionsInInventory(potionType data.PotionType, d *data.Data) []data.Item {
 	var potions []data.Item
 
-	for _, item := range d.Items.AllItems {
-		if item.Location != data.item.LocationInventory {
+	for _, itm := range d.Items.AllItems {
+		if itm.Location != item.LocationInventory {  // ✅ Zmieniono z data.item na item
 			continue
 		}
 
 		switch potionType {
 		case data.HealingPotion:
-			if item.IsHealingPotion() {
-				potions = append(potions, item)
+			if itm.IsHealingPotion() {
+				potions = append(potions, itm)
 			}
 		case data.ManaPotion:
-			if item.IsManaPotion() {
-				potions = append(potions, item)
+			if itm.IsManaPotion() {
+				potions = append(potions, itm)
 			}
 		case data.RejuvenationPotion:
-			if item.IsRejuvPotion() {
-				potions = append(potions, item)
+			if itm.IsRejuvPotion() {
+				potions = append(potions, itm)
 			}
 		}
 	}
