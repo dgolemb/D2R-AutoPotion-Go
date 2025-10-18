@@ -31,6 +31,11 @@ type StructConfig struct {
 		ManaInterval        float32 `yaml:"manaInterval"`
 		HealingMercInterval float32 `yaml:"healingMercInterval"`
 	} `yaml:"timings"`
+	BeltRefill struct {
+		Enabled          bool `yaml:"enabled"`
+		CheckInterval    int  `yaml:"checkInterval"`
+		MinPotionsInSlot int  `yaml:"minPotionsInSlot"`
+	} `yaml:"beltRefill"`
 }
 
 // IntList is a helper that unmarshals either a single int or a sequence of ints from YAML
@@ -55,7 +60,7 @@ func (il *IntList) UnmarshalYAML(value *yaml.Node) error {
 	return fmt.Errorf("unable to unmarshal IntList from YAML node kind %d", value.Kind)
 }
 
-// Load reads the config.ini file and returns a Config struct filled with data from the ini file
+// Load reads the config.yaml file and returns a Config struct filled with data from the ini file
 func Load() error {
 	r, err := os.Open("config/config.yaml")
 	if err != nil {
