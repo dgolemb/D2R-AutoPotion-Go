@@ -71,35 +71,35 @@ func (i Item) IsPotion() bool {
 
 // IsHealingPotion sprawdza czy przedmiot jest miksturą zdrowia
 func (i Item) IsHealingPotion() bool {
-	nameLower := strings.ToLower(i.Name)
+	nameLower := strings.ToLower(string(i.Name))
 	return strings.Contains(nameLower, "healingpotion") ||
 		strings.Contains(nameLower, "healing potion") ||
-		i.Name == "MinorHealingPotion" ||
-		i.Name == "LightHealingPotion" ||
-		i.Name == "HealingPotion" ||
-		i.Name == "GreaterHealingPotion" ||
-		i.Name == "SuperHealingPotion"
+		string(i.Name) == "MinorHealingPotion" ||
+		string(i.Name) == "LightHealingPotion" ||
+		string(i.Name) == "HealingPotion" ||
+		string(i.Name) == "GreaterHealingPotion" ||
+		string(i.Name) == "SuperHealingPotion"
 }
 
 // IsManaPotion sprawdza czy przedmiot jest miksturą many
 func (i Item) IsManaPotion() bool {
-	nameLower := strings.ToLower(i.Name)
+	nameLower := strings.ToLower(string(i.Name))
 	return strings.Contains(nameLower, "manapotion") ||
 		strings.Contains(nameLower, "mana potion") ||
-		i.Name == "MinorManaPotion" ||
-		i.Name == "LightManaPotion" ||
-		i.Name == "ManaPotion" ||
-		i.Name == "GreaterManaPotion" ||
-		i.Name == "SuperManaPotion"
+		string(i.Name) == "MinorManaPotion" ||
+		string(i.Name) == "LightManaPotion" ||
+		string(i.Name) == "ManaPotion" ||
+		string(i.Name) == "GreaterManaPotion" ||
+		string(i.Name) == "SuperManaPotion"
 }
 
 // IsRejuvPotion sprawdza czy przedmiot jest miksturą odnowy (rejuvenation)
 func (i Item) IsRejuvPotion() bool {
-	nameLower := strings.ToLower(i.Name)
+	nameLower := strings.ToLower(string(i.Name))
 	return strings.Contains(nameLower, "rejuv") ||
 		strings.Contains(nameLower, "rejuvenation") ||
-		i.Name == "RejuvenationPotion" ||
-		i.Name == "FullRejuvenationPotion"
+		string(i.Name) == "RejuvenationPotion" ||
+		string(i.Name) == "FullRejuvenationPotion"
 }
 
 func (i Item) IsFromQuest() bool {
