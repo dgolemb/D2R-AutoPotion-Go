@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
+	//"os/exec"
 	"os/signal"
 	"time"
 
@@ -43,7 +43,7 @@ func main() {
 	if err != nil {
 		log.Println(err)
 	}
-	var cmd *exec.Cmd
+	//var cmd *exec.Cmd
 	//cmd = exec.Command(path + "\\gui.exe") // zakomentowane - bez GUI
 
 	hello := widget.NewLabel("Diablo 2 Ressurrected AutoPotion")
