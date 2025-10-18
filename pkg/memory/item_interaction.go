@@ -36,124 +36,138 @@ func (ii *ItemInteraction) GetItemAddress(unitID data.UnitID) uintptr {
 }
 
 // MovePotionToBelt przenosi miksturę z inventory na pasek przez modyfikację pamięci
-// Parametry:
-//   itm - przedmiot do przeniesienia
-//   beltSlot - slot paska (0-3), odpowiada klawiszy 1-4
-//   targetRow - rząd w slocie (0-3), 0 to dół paska
 func (ii *ItemInteraction) MovePotionToBelt(itm data.Item, beltSlot int, targetRow int) error {
 	if itm.Location != item.LocationInventory {
-		return fmt.Errorf("item is not in inventory, current location: %d", itm.Location)
+		return fmt.Errorf("item is not in inventory: %s", itm.Location)
 	}
 
-	if beltSlot < 0 || beltSlot > 3 {
-		return fmt.Errorf("invalid belt slot: %d, must be 0-3", beltSlot)
-	}
-
-	if targetRow < 0 || targetRow > 3 {
-		return fmt.Errorf("invalid target row: %d, must be 0-3", targetRow)
-	}
-
-	// Znajdź adres przedmiotu w pamięci
+	// Znajdź adres przedmiotu
 	itemAddress := ii.GetItemAddress(itm.UnitID)
 	if itemAddress == 0 {
 		return fmt.Errorf("could not find item address for UnitID %d", itm.UnitID)
 	}
 
-	// Odczytaj wskaźniki struktury przedmiotu
+	// Odczytaj obecne dane
 	itemDataBuffer := ii.gr.Process.ReadBytesFromMemory(itemAddress, 144)
 	unitDataPtr := uintptr(ReadUIntFromBuffer(itemDataBuffer, 0x10, Uint64))
 	pathPtr := uintptr(ReadUIntFromBuffer(itemDataBuffer, 0x38, Uint64))
 
 	if unitDataPtr == 0 || pathPtr == 0 {
-		return fmt.Errorf("invalid pointers for item (unitData: %x, path: %x)", unitDataPtr, pathPtr)
+		return fmt.Errorf("invalid pointers for item")
 	}
 
-	// Krok 1: Zmień lokalizację przedmiotu z inventory (0) na belt (2)
-	if err := ii.gr.Process.WriteUInt(itemAddress+0x0C, uint64(2), Uint32); err != nil {
+	// 1. Zmień lokalizację z inventory (0) na belt (2)
+	if err := ii.gr.Process.WriteUInt(itemAddress+0x0C, 2, Uint32); err != nil {
 		return fmt.Errorf("failed to write item location: %v", err)
 	}
 
-	// Krok 2: Ustaw invPage na 0 (dla paska)
-	if err := ii.gr.Process.WriteUInt(unitDataPtr+0x55, uint64(0), Uint8); err != nil {
+	// 2. Ustaw invPage na 0 (główne inventory/belt)
+	if err := ii.gr.Process.WriteUInt(unitDataPtr+0x55, 0, Uint8); err != nil {
 		return fmt.Errorf("failed to write invPage: %v", err)
 	}
 
-	// Krok 3: Ustaw pozycję na pasku (X = slot, Y = rząd)
-	// X określa kolumnę paska (0-3 = sloty odpowiadające klawiszom 1-4)
-	// Y określa rząd w kolumnie (0 = dół, 3 = góra)
-	if err := ii.gr.Process.WriteUInt(pathPtr+0x10, uint64(beltSlot), Uint16); err != nil {
-		return fmt.Errorf("failed to write X position: %v", err)
+	// 3. Ustaw pozycję na pasku (X = slot kolumny, Y = rząd)
+	if err := ii.gr.Process.WriteUInt(pathPtr+0x10, uint(beltSlot), Uint16); err != nil {
+		return fmt.Errorf("failed to write belt X position: %v", err)
 	}
 
-	if err := ii.gr.Process.WriteUInt(pathPtr+0x14, uint64(targetRow), Uint16); err != nil {
-		return fmt.Errorf("failed to write Y position: %v", err)
+	if err := ii.gr.Process.WriteUInt(pathPtr+0x14, uint(targetRow), Uint16); err != nil {
+		return fmt.Errorf("failed to write belt Y position: %v", err)
 	}
 
-	// Krok 4: Zaktualizuj dodatkowe pola pozycji (dla pewności)
-	if err := ii.gr.Process.WriteUInt(pathPtr+0x02, uint64(beltSlot), Uint16); err != nil {
+	// 4. Zaktualizuj dodatkowe pola pozycji
+	if err := ii.gr.Process.WriteUInt(pathPtr+0x02, uint(beltSlot), Uint16); err != nil {
 		return fmt.Errorf("failed to write room X: %v", err)
 	}
 
-	if err := ii.gr.Process.WriteUInt(pathPtr+0x06, uint64(targetRow), Uint16); err != nil {
+	if err := ii.gr.Process.WriteUInt(pathPtr+0x06, uint(targetRow), Uint16); err != nil {
 		return fmt.Errorf("failed to write room Y: %v", err)
 	}
 
-	// Mała pauza dla synchronizacji pamięci
-	time.Sleep(10 * time.Millisecond)
-
+	// Małe opóźnienie dla stabilności
+	time.Sleep(50 * time.Millisecond)
+	
 	return nil
 }
 
-// GetItemsInInventory zwraca wszystkie przedmioty w ekwipunku
-func (ii *ItemInteraction) GetItemsInInventory(items data.Items) []data.Item {
-	var inventoryItems []data.Item
-	for _, itm := range items.AllItems {
-		if itm.Location == item.LocationInventory {
-			inventoryItems = append(inventoryItems, itm)
-		}
+// FindFirstEmptyRowInBeltSlot znajduje pierwszy wolny rząd w danym slocie paska
+func (ii *ItemInteraction) FindFirstEmptyRowInBeltSlot(beltSlot int, maxRows int) (int, error) {
+	d, err := ii.gr.GetData()
+	if err != nil {
+		return -1, err
 	}
-	return inventoryItems
-}
 
-// FindPotionsInInventory znajduje mikstury określonego typu w ekwipunku
-func (ii *ItemInteraction) FindPotionsInInventory(items data.Items, potionType string) []data.Item {
-	var potions []data.Item
-	inventoryItems := ii.GetItemsInInventory(items)
-
-	for _, itm := range inventoryItems {
-		switch potionType {
-		case "hp":
-			if itm.IsHealingPotion() {
-				potions = append(potions, itm)
-			}
-		case "mana":
-			if itm.IsManaPotion() {
-				potions = append(potions, itm)
-			}
-		case "rejuv":
-			if itm.IsRejuvPotion() {
-				potions = append(potions, itm)
-			}
-		}
-	}
-	return potions
-}
-
-// GetNextAvailableRowInBeltSlot znajduje pierwszy wolny rząd w danym slocie paska
-// Zwraca numer rzędu (0-3) lub -1 jeśli slot jest pełny
-func (ii *ItemInteraction) GetNextAvailableRowInBeltSlot(belt data.Belt, beltSlot int) int {
-	// Sprawdź każdy rząd od dołu (0) do góry (3)
-	for row := 0; row <= 3; row++ {
+	// Sprawdź każdy rząd od dołu (0) do góry
+	for row := 0; row < maxRows; row++ {
 		occupied := false
-		for _, itm := range belt.Items {
-			if itm.Position.X == beltSlot && itm.Position.Y == row {
+		for _, beltItem := range d.Items.Belt.Items {
+			if beltItem.Position.X == beltSlot && beltItem.Position.Y == row {
 				occupied = true
 				break
 			}
 		}
 		if !occupied {
-			return row
+			return row, nil
 		}
 	}
-	return -1 // Slot pełny
+
+	return -1, fmt.Errorf("no empty row found in belt slot %d", beltSlot)
+}
+
+// GetBeltSlotContents zwraca listę przedmiotów w danym slocie paska
+func (ii *ItemInteraction) GetBeltSlotContents(beltSlot int) []data.Item {
+	d, _ := ii.gr.GetData()
+	var items []data.Item
+	
+	for _, beltItem := range d.Items.Belt.Items {
+		if beltItem.Position.X == beltSlot {
+			items = append(items, beltItem)
+		}
+	}
+	
+	return items
+}
+
+// DebugItemMemory wyświetla szczegóły pamięci przedmiotu (do debugowania)
+func (ii *ItemInteraction) DebugItemMemory(itm data.Item) {
+	itemAddress := ii.GetItemAddress(itm.UnitID)
+	if itemAddress == 0 {
+		fmt.Printf("Could not find address for item %s (ID: %d)\n", itm.Name, itm.UnitID)
+		return
+	}
+
+	fmt.Printf("\n=== ITEM MEMORY DEBUG: %s ===\n", itm.Name)
+	fmt.Printf("Item Address: 0x%X\n", itemAddress)
+	fmt.Printf("Unit ID: %d\n", itm.UnitID)
+	
+	itemDataBuffer := ii.gr.Process.ReadBytesFromMemory(itemAddress, 144)
+	
+	itemType := ReadUIntFromBuffer(itemDataBuffer, 0x00, Uint32)
+	txtFileNo := ReadUIntFromBuffer(itemDataBuffer, 0x04, Uint32)
+	unitID := ReadUIntFromBuffer(itemDataBuffer, 0x08, Uint32)
+	itemLoc := ReadUIntFromBuffer(itemDataBuffer, 0x0C, Uint32)
+	unitDataPtr := uintptr(ReadUIntFromBuffer(itemDataBuffer, 0x10, Uint64))
+	pathPtr := uintptr(ReadUIntFromBuffer(itemDataBuffer, 0x38, Uint64))
+	
+	fmt.Printf("Item Type: %d\n", itemType)
+	fmt.Printf("TXT File No: %d\n", txtFileNo)
+	fmt.Printf("Unit ID: %d\n", unitID)
+	fmt.Printf("Item Location: %d (0=inventory, 1=equipped, 2=belt)\n", itemLoc)
+	fmt.Printf("Unit Data Ptr: 0x%X\n", unitDataPtr)
+	fmt.Printf("Path Ptr: 0x%X\n", pathPtr)
+	
+	if unitDataPtr > 0 {
+		unitDataBuffer := ii.gr.Process.ReadBytesFromMemory(unitDataPtr, 144)
+		invPage := ReadUIntFromBuffer(unitDataBuffer, 0x55, Uint8)
+		fmt.Printf("Inv Page: %d\n", invPage)
+	}
+	
+	if pathPtr > 0 {
+		pathBuffer := ii.gr.Process.ReadBytesFromMemory(pathPtr, 144)
+		itemX := ReadUIntFromBuffer(pathBuffer, 0x10, Uint16)
+		itemY := ReadUIntFromBuffer(pathBuffer, 0x14, Uint16)
+		fmt.Printf("Position: X=%d, Y=%d\n", itemX, itemY)
+	}
+	
+	fmt.Println("========================")
 }

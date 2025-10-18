@@ -6,160 +6,197 @@ import (
 
 	"github.com/Hefero/D2R-AutoPotion-Go/cmd/config"
 	"github.com/Hefero/D2R-AutoPotion-Go/pkg/data"
+	"github.com/Hefero/D2R-AutoPotion-Go/pkg/data/item"
 	"github.com/Hefero/D2R-AutoPotion-Go/pkg/memory"
 )
 
 type BeltRefiller struct {
-	gr              *memory.GameReader
-	interaction     *memory.ItemInteraction
-	lastRefillCheck time.Time
-	debugMode       bool
+	gr          *memory.GameReader
+	interaction *memory.ItemInteraction
+	lastRefill  time.Time
+	debugMode   bool
 }
 
 func NewBeltRefiller(gr *memory.GameReader) *BeltRefiller {
 	return &BeltRefiller{
-		gr:              gr,
-		interaction:     memory.NewItemInteraction(gr),
-		lastRefillCheck: time.Now(),
-		debugMode:       false,
+		gr:          gr,
+		interaction: memory.NewItemInteraction(gr),
+		lastRefill:  time.Time{},
+		debugMode:   false,
 	}
 }
 
+// SetDebugMode włącza/wyłącza szczegółowe logi
 func (br *BeltRefiller) SetDebugMode(enabled bool) {
 	br.debugMode = enabled
 }
 
-func (br *BeltRefiller) log(format string, args ...interface{}) {
-	if br.debugMode {
-		fmt.Printf("[BeltRefiller] "+format+"\n", args...)
-	}
-}
-
-// CheckAndRefillBelt sprawdza stan paska i uzupełnia go automatycznie
+// CheckAndRefillBelt sprawdza i uzupełnia pasek miksturami z inventory
 func (br *BeltRefiller) CheckAndRefillBelt() error {
+	// Sprawdź czy funkcja jest włączona
 	if !config.Config.BeltRefill.Enabled {
 		return nil
 	}
 
-	// Sprawdź czy minął odpowiedni czas od ostatniego sprawdzenia
-	if time.Since(br.lastRefillCheck) < time.Duration(config.Config.BeltRefill.CheckInterval)*time.Second {
+	// Nie częściej niż co checkInterval sekund
+	if time.Since(br.lastRefill) < time.Duration(config.Config.BeltRefill.CheckInterval)*time.Second {
 		return nil
 	}
 
-	br.lastRefillCheck = time.Now()
-
-	// Pobierz dane gry
 	d, err := br.gr.GetData()
 	if err != nil {
-		return fmt.Errorf("failed to get game data: %v", err)
+		return err
 	}
 
-	br.log("Checking belt status...")
+	// Nie uzupełniaj w mieście
+	if d.PlayerUnit.Area.IsTown() {
+		return nil
+	}
 
-	// Uzupełnij mikstury HP
-	if len(config.Config.Bindings.PotionHP) > 0 {
-		for _, slot := range config.Config.Bindings.PotionHP {
-			beltSlot := slot - 1 // Konwersja z 1-4 na 0-3
-			if err := br.refillBeltSlot(d, beltSlot, "hp"); err != nil {
-				br.log("Error refilling HP slot %d: %v", slot, err)
+	belt := d.Items.Belt
+	needsRefill := false
+
+	if br.debugMode {
+		fmt.Printf("\n=== Belt Refill Check ===\n")
+		fmt.Printf("Belt type: %s (Max rows: %d)\n", belt.Name, belt.Rows())
+	}
+
+	// Sprawdź sloty z miksturami zdrowia
+	hpSlots := belt.GetSlotsByPotionType(data.HealingPotion)
+	for _, slot := range hpSlots {
+		if belt.GetPotionCountInSlot(slot) < config.Config.BeltRefill.MinPotionsInSlot {
+			needsRefill = true
+			if br.debugMode {
+				fmt.Printf("HP Slot %d needs refill\n", slot)
+			}
+			if err := br.refillSlot(slot, data.HealingPotion, &d); err != nil {
+				fmt.Printf("Error refilling HP slot %d: %v\n", slot, err)
 			}
 		}
 	}
 
-	// Uzupełnij mikstury Many
-	if len(config.Config.Bindings.PotionMANA) > 0 {
-		for _, slot := range config.Config.Bindings.PotionMANA {
-			beltSlot := slot - 1 // Konwersja z 1-4 na 0-3
-			if err := br.refillBeltSlot(d, beltSlot, "mana"); err != nil {
-				br.log("Error refilling MANA slot %d: %v", slot, err)
+	// Sprawdź sloty z miksturami many
+	manaSlots := belt.GetSlotsByPotionType(data.ManaPotion)
+	for _, slot := range manaSlots {
+		if belt.GetPotionCountInSlot(slot) < config.Config.BeltRefill.MinPotionsInSlot {
+			needsRefill = true
+			if br.debugMode {
+				fmt.Printf("Mana Slot %d needs refill\n", slot)
+			}
+			if err := br.refillSlot(slot, data.ManaPotion, &d); err != nil {
+				fmt.Printf("Error refilling Mana slot %d: %v\n", slot, err)
 			}
 		}
 	}
 
-	// Uzupełnij mikstury Rejuv (jeśli skonfigurowane)
-	if len(config.Config.Bindings.PotionREJUV) > 0 {
-		for _, slot := range config.Config.Bindings.PotionREJUV {
-			beltSlot := slot - 1 // Konwersja z 1-4 na 0-3
-			if err := br.refillBeltSlot(d, beltSlot, "rejuv"); err != nil {
-				br.log("Error refilling REJUV slot %d: %v", slot, err)
-			}
-		}
+	if needsRefill {
+		br.lastRefill = time.Now()
 	}
 
 	return nil
 }
 
-// refillBeltSlot uzupełnia konkretny slot paska
-func (br *BeltRefiller) refillBeltSlot(d data.Data, beltSlot int, potionType string) error {
-	// Sprawdź ile mikstur jest już w slocie
-	currentCount := d.Items.Belt.GetPotionCountInSlot(beltSlot)
+// refillSlot uzupełnia slot paska miksturami z inventory (przez modyfikację pamięci)
+func (br *BeltRefiller) refillSlot(slotX int, potionType data.PotionType, d *data.Data) error {
+	// Znajdź mikstury odpowiedniego typu w inventory
+	potionsInInventory := br.findPotionsInInventory(potionType, d)
 	
-	br.log("Slot %d (%s): %d potions", beltSlot, potionType, currentCount)
-
-	// Jeśli slot ma wystarczająco dużo mikstur, pomiń
-	if currentCount >= config.Config.BeltRefill.MinPotionsInSlot {
-		br.log("Slot %d has enough potions (%d >= %d)", beltSlot, currentCount, config.Config.BeltRefill.MinPotionsInSlot)
+	if len(potionsInInventory) == 0 {
+		if br.debugMode {
+			fmt.Printf("No %s potions found in inventory\n", potionType)
+		}
 		return nil
 	}
 
-	// Oblicz ile mikstur trzeba dodać
-	potionsNeeded := config.Config.BeltRefill.MinPotionsInSlot - currentCount
-	br.log("Need to add %d %s potions to slot %d", potionsNeeded, potionType, beltSlot)
+	// Oblicz ile mikstur potrzebujemy
+	beltRows := d.Items.Belt.Rows()
+	currentCount := d.Items.Belt.GetPotionCountInSlot(slotX)
+	neededCount := beltRows - currentCount
 
-	// Znajdź mikstury w ekwipunku
-	availablePotions := br.interaction.FindPotionsInInventory(d.Items, potionType)
-	
-	if len(availablePotions) == 0 {
-		br.log("No %s potions found in inventory for slot %d", potionType, beltSlot)
+	if neededCount <= 0 {
+		if br.debugMode {
+			fmt.Printf("Slot %d already full (%d/%d)\n", slotX, currentCount, beltRows)
+		}
 		return nil
 	}
 
-	br.log("Found %d %s potions in inventory", len(availablePotions), potionType)
+	if br.debugMode {
+		fmt.Printf("Slot %d: current=%d, max=%d, need=%d potions\n", 
+			slotX, currentCount, beltRows, neededCount)
+		fmt.Printf("Found %d %s potions in inventory\n", len(potionsInInventory), potionType)
+	}
 
-	// Przenieś mikstury na pasek
-	movedCount := 0
-	for i := 0; i < len(availablePotions) && movedCount < potionsNeeded; i++ {
-		potion := availablePotions[i]
-		
-		// Znajdź pierwszy wolny rząd w slocie
-		targetRow := br.interaction.GetNextAvailableRowInBeltSlot(d.Items.Belt, beltSlot)
-		
-		if targetRow == -1 {
-			br.log("Slot %d is full, cannot add more potions", beltSlot)
+	// Przenieś mikstury bezpośrednio w pamięci
+	refilled := 0
+	for _, potion := range potionsInInventory {
+		if refilled >= neededCount {
 			break
 		}
 
-		br.log("Moving %s (UnitID: %d) to slot %d, row %d", potion.Name, potion.UnitID, beltSlot, targetRow)
+		// Znajdź pierwszy wolny rząd w tym slocie
+		targetRow, err := br.interaction.FindFirstEmptyRowInBeltSlot(slotX, beltRows)
+		if err != nil {
+			if br.debugMode {
+				fmt.Printf("No empty row in slot %d: %v\n", slotX, err)
+			}
+			break
+		}
 
-		// Przenieś miksturę poprzez manipulację pamięcią
-		if err := br.interaction.MovePotionToBelt(potion, beltSlot, targetRow); err != nil {
-			br.log("Failed to move potion: %v", err)
+		if br.debugMode {
+			fmt.Printf("Moving %s (ID:%d) to slot %d, row %d\n", 
+				potion.Name, potion.UnitID, slotX, targetRow)
+		}
+
+		// Przenieś miksturę przez modyfikację pamięci
+		if err := br.interaction.MovePotionToBelt(potion, slotX, targetRow); err != nil {
+			fmt.Printf("Failed to move potion: %v\n", err)
 			continue
 		}
 
-		movedCount++
-		br.log("Successfully moved potion %d/%d", movedCount, potionsNeeded)
-
-		// Krótka pauza między przeniesieniami dla stabilności
-		time.Sleep(20 * time.Millisecond)
-
-		// Odśwież dane po przeniesieniu
-		d, err := br.gr.GetData()
+		refilled++
+		
+		// Małe opóźnienie dla stabilności
+		time.Sleep(100 * time.Millisecond)
+		
+		// Odśwież dane po każdej zmianie
+		newData, err := br.gr.GetData()
 		if err != nil {
 			return fmt.Errorf("failed to refresh game data: %v", err)
 		}
+		*d = newData
 	}
 
-	if movedCount > 0 {
-		br.log("Successfully refilled slot %d with %d %s potions", beltSlot, movedCount, potionType)
+	if refilled > 0 && br.debugMode {
+		fmt.Printf("✓ Refilled slot %d with %d %s potions\n", slotX, refilled, potionType)
 	}
-
+	
 	return nil
 }
 
-// ForceRefillAll wymusza natychmiastowe uzupełnienie wszystkich slotów
-// Przydatne do testowania lub ręcznego wywołania
-func (br *BeltRefiller) ForceRefillAll() error {
-	br.lastRefillCheck = time.Time{} // Reset timera
-	return br.CheckAndRefillBelt()
+// findPotionsInInventory znajduje wszystkie mikstury danego typu w inventory
+func (br *BeltRefiller) findPotionsInInventory(potionType data.PotionType, d *data.Data) []data.Item {
+	var potions []data.Item
+
+	for _, itm := range d.Items.AllItems {
+		if itm.Location != item.LocationInventory {
+			continue
+		}
+
+		switch potionType {
+		case data.HealingPotion:
+			if itm.IsHealingPotion() {
+				potions = append(potions, itm)
+			}
+		case data.ManaPotion:
+			if itm.IsManaPotion() {
+				potions = append(potions, itm)
+			}
+		case data.RejuvenationPotion:
+			if itm.IsRejuvPotion() {
+				potions = append(potions, itm)
+			}
+		}
+	}
+
+	return potions
 }
