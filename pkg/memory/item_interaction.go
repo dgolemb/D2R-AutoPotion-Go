@@ -57,30 +57,30 @@ func (ii *ItemInteraction) MovePotionToBelt(itm data.Item, beltSlot int, targetR
 	}
 
 	// 1. Zmień lokalizację z inventory (0) na belt (2)
-	if err := ii.gr.Process.WriteUInt(itemAddress+0x0C, 2, Uint32); err != nil {
+	if err := ii.gr.Process.WriteUInt(itemAddress+0x0C, uint64(2), Uint32); err != nil {
 		return fmt.Errorf("failed to write item location: %v", err)
 	}
 
 	// 2. Ustaw invPage na 0 (główne inventory/belt)
-	if err := ii.gr.Process.WriteUInt(unitDataPtr+0x55, 0, Uint8); err != nil {
+	if err := ii.gr.Process.WriteUInt(unitDataPtr+0x55, uint64(0), Uint8); err != nil {
 		return fmt.Errorf("failed to write invPage: %v", err)
 	}
 
 	// 3. Ustaw pozycję na pasku (X = slot kolumny, Y = rząd)
-	if err := ii.gr.Process.WriteUInt(pathPtr+0x10, uint(beltSlot), Uint16); err != nil {
+	if err := ii.gr.Process.WriteUInt(pathPtr+0x10, uint64(beltSlot), Uint16); err != nil {
 		return fmt.Errorf("failed to write belt X position: %v", err)
 	}
 
-	if err := ii.gr.Process.WriteUInt(pathPtr+0x14, uint(targetRow), Uint16); err != nil {
+	if err := ii.gr.Process.WriteUInt(pathPtr+0x14, uint64(targetRow), Uint16); err != nil {
 		return fmt.Errorf("failed to write belt Y position: %v", err)
 	}
 
 	// 4. Zaktualizuj dodatkowe pola pozycji
-	if err := ii.gr.Process.WriteUInt(pathPtr+0x02, uint(beltSlot), Uint16); err != nil {
+	if err := ii.gr.Process.WriteUInt(pathPtr+0x02, uint64(beltSlot), Uint16); err != nil {
 		return fmt.Errorf("failed to write room X: %v", err)
 	}
 
-	if err := ii.gr.Process.WriteUInt(pathPtr+0x06, uint(targetRow), Uint16); err != nil {
+	if err := ii.gr.Process.WriteUInt(pathPtr+0x06, uint64(targetRow), Uint16); err != nil {
 		return fmt.Errorf("failed to write room Y: %v", err)
 	}
 
