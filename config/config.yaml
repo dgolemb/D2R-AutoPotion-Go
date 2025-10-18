@@ -10,7 +10,7 @@ bindings: # Hotkey configuration for potions
   # You can provide a single number or a list. Example: potionHP: [1, 2]
   potionHP: [1,2]
   potionMANA: [3,4]
-  potionREJUV: 2
+  #potionREJUV: 2
 
 timings: # Delay time beetween actions (seconds)
   rejuvInterval: 1
