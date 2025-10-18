@@ -69,12 +69,12 @@ func (ii *ItemInteraction) MovePotionToBelt(itm data.Item, beltSlot int, targetR
 	}
 
 	// Krok 1: Zmień lokalizację przedmiotu z inventory (0) na belt (2)
-	if err := ii.gr.Process.WriteUInt(itemAddress+0x0C, 2, Uint32); err != nil {
+	if err := ii.gr.Process.WriteUInt(itemAddress+0x0C, uint64(2), Uint32); err != nil {
 		return fmt.Errorf("failed to write item location: %v", err)
 	}
 
 	// Krok 2: Ustaw invPage na 0 (dla paska)
-	if err := ii.gr.Process.WriteUInt(unitDataPtr+0x55, 0, Uint8); err != nil {
+	if err := ii.gr.Process.WriteUInt(unitDataPtr+0x55, uint64(0), Uint8); err != nil {
 		return fmt.Errorf("failed to write invPage: %v", err)
 	}
 

@@ -3,6 +3,7 @@ package memory
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"github.com/winlabs/gowin32"
 	"golang.org/x/sys/windows"
 	"strings"
@@ -163,4 +164,35 @@ func (p Process) FindPattern(memory []byte, pattern, mask string) uintptr {
 
 func (p Process) GetPID() uint {
 	return p.pid
+}
+
+// WriteUInt zapisuje wartość do pamięci procesu
+func (p Process) WriteUInt(address uintptr, value uint64, size IntType) error {
+	var data []byte
+	
+	switch size {
+	case Uint8:
+		data = []byte{byte(value)}
+	case Uint16:
+		data = make([]byte, 2)
+		binary.LittleEndian.PutUint16(data, uint16(value))
+	case Uint32:
+		data = make([]byte, 4)
+		binary.LittleEndian.PutUint32(data, uint32(value))
+	case Uint64:
+		data = make([]byte, 8)
+		binary.LittleEndian.PutUint64(data, uint64(value))
+	default:
+		return fmt.Errorf("invalid size type: %d", size)
+	}
+	
+	return windows.WriteProcessMemory(p.handler, address, &data[0], uintptr(len(data)), nil)
+}
+
+// WriteBytesToMemory zapisuje tablicę bajtów do pamięci
+func (p Process) WriteBytesToMemory(address uintptr, data []byte) error {
+	if len(data) == 0 {
+		return fmt.Errorf("no data to write")
+	}
+	return windows.WriteProcessMemory(p.handler, address, &data[0], uintptr(len(data)), nil)
 }
