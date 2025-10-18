@@ -24,7 +24,7 @@ func NewProcess() (Process, error) {
 		return Process{}, err
 	}
 
-	h, err := windows.OpenProcess(0x0010, false, uint32(module.ProcessID))
+	h, err := windows.OpenProcess(0x001F0FFF, false, uint32(module.ProcessID)) // ✅ Zmieniono na PROCESS_ALL_ACCESS
 	if err != nil {
 		return Process{}, err
 	}
@@ -163,4 +163,32 @@ func (p Process) FindPattern(memory []byte, pattern, mask string) uintptr {
 
 func (p Process) GetPID() uint {
 	return p.pid
+}
+
+// WriteUInt zapisuje wartość do pamięci procesu
+func (p Process) WriteUInt(address uintptr, value uint, size IntType) error {
+	var data []byte
+	
+	switch size {
+	case Uint8:
+		data = []byte{byte(value)}
+	case Uint16:
+		data = make([]byte, 2)
+		binary.LittleEndian.PutUint16(data, uint16(value))
+	case Uint32:
+		data = make([]byte, 4)
+		binary.LittleEndian.PutUint32(data, uint32(value))
+	case Uint64:
+		data = make([]byte, 8)
+		binary.LittleEndian.PutUint64(data, uint64(value))
+	default:
+		return nil
+	}
+	
+	return windows.WriteProcessMemory(p.handler, address, &data[0], uintptr(len(data)), nil)
+}
+
+// WriteBytesToMemory zapisuje tablicę bajtów do pamięci
+func (p Process) WriteBytesToMemory(address uintptr, data []byte) error {
+	return windows.WriteProcessMemory(p.handler, address, &data[0], uintptr(len(data)), nil)
 }

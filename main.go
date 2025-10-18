@@ -114,6 +114,43 @@ func main() {
 			debugger := lifewatcher.NewCoordinateDebugger(gr)
 			go debugger.TestClickOnPotion()
 		}),
+		widget.NewButton("Test Memory Move", func() {
+			process, err := memory.NewProcess()
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+				return
+			}
+			gr := memory.NewGameReader(process)
+			interaction := memory.NewItemInteraction(gr)
+			
+			d, err := gr.GetData()
+			if err != nil {
+				fmt.Printf("Error getting data: %v\n", err)
+				return
+			}
+			
+			// Znajdź pierwszą miksturę HP w inventory
+			for _, itm := range d.Items.AllItems {
+				if itm.Location == item.LocationInventory && itm.IsHealingPotion() {
+					fmt.Printf("Testing move of %s to belt slot 0\n", itm.Name)
+					interaction.DebugItemMemory(itm)
+					
+					targetRow, err := interaction.FindFirstEmptyRowInBeltSlot(0, d.Items.Belt.Rows())
+					if err != nil {
+						fmt.Printf("Error: %v\n", err)
+						return
+					}
+					
+					if err := interaction.MovePotionToBelt(itm, 0, targetRow); err != nil {
+						fmt.Printf("Error moving: %v\n", err)
+					} else {
+						fmt.Printf("✓ Successfully moved potion!\n")
+					}
+					return
+				}
+			}
+			fmt.Println("No HP potion found in inventory")
+		}),
 	))
 
 	w.ShowAndRun()

@@ -52,9 +52,12 @@ type ExperienceCalc struct {
 }
 
 func NewWatcher(gr *memory.GameReader) *Watcher {
+	refiller := NewBeltRefiller(gr)
+	refiller.SetDebugMode(true) // ✅ Włącz debug
+	
 	return &Watcher{
-		Gr:          gr,
-		BeltRefiller: NewBeltRefiller(gr),  // ➕ Dodaj to
+		Gr:           gr,
+		BeltRefiller: refiller,
 	}
 }
 
