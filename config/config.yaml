@@ -17,3 +17,8 @@ timings: # Delay time beetween actions (seconds)
   healingInterval: 4
   manaInterval: 5
   healingMercInterval: 6
+
+beltRefill:
+  enabled: true
+  checkInterval: 4     # Co ile sekund sprawdzać pasek
+  minPotionsInSlot: 2  # Minimalna liczba mikstur w slocie przed uzupełnieniem

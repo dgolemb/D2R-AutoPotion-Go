@@ -69,16 +69,37 @@ func (i Item) IsPotion() bool {
 	return i.IsHealingPotion() || i.IsManaPotion() || i.IsRejuvPotion()
 }
 
+// IsHealingPotion sprawdza czy przedmiot jest miksturą zdrowia
 func (i Item) IsHealingPotion() bool {
-	return strings.Contains(string(i.Name), string(HealingPotion))
+	nameLower := strings.ToLower(i.Name)
+	return strings.Contains(nameLower, "healingpotion") ||
+		strings.Contains(nameLower, "healing potion") ||
+		i.Name == "MinorHealingPotion" ||
+		i.Name == "LightHealingPotion" ||
+		i.Name == "HealingPotion" ||
+		i.Name == "GreaterHealingPotion" ||
+		i.Name == "SuperHealingPotion"
 }
 
+// IsManaPotion sprawdza czy przedmiot jest miksturą many
 func (i Item) IsManaPotion() bool {
-	return strings.Contains(string(i.Name), string(ManaPotion))
+	nameLower := strings.ToLower(i.Name)
+	return strings.Contains(nameLower, "manapotion") ||
+		strings.Contains(nameLower, "mana potion") ||
+		i.Name == "MinorManaPotion" ||
+		i.Name == "LightManaPotion" ||
+		i.Name == "ManaPotion" ||
+		i.Name == "GreaterManaPotion" ||
+		i.Name == "SuperManaPotion"
 }
 
+// IsRejuvPotion sprawdza czy przedmiot jest miksturą odnowy (rejuvenation)
 func (i Item) IsRejuvPotion() bool {
-	return strings.Contains(string(i.Name), string(RejuvenationPotion))
+	nameLower := strings.ToLower(i.Name)
+	return strings.Contains(nameLower, "rejuv") ||
+		strings.Contains(nameLower, "rejuvenation") ||
+		i.Name == "RejuvenationPotion" ||
+		i.Name == "FullRejuvenationPotion"
 }
 
 func (i Item) IsFromQuest() bool {
@@ -89,4 +110,59 @@ func (i Item) IsFromQuest() bool {
 	}
 
 	return false
+}
+
+// GetPotionCountInSlot zlicza ilość mikstur w danym slocie paska (kolumnie)
+func (b Belt) GetPotionCountInSlot(slot int) int {
+	count := 0
+	for _, item := range b.Items {
+		// Position.X to numer slotu (kolumny) od 0 do 3
+		if item.Position.X == slot {
+			count++
+		}
+	}
+	return count
+}
+
+// GetItemsInBeltSlot zwraca wszystkie przedmioty w danym slocie paska
+func (b Belt) GetItemsInBeltSlot(slot int) []Item {
+	var items []Item
+	for _, item := range b.Items {
+		if item.Position.X == slot {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
+// IsSlotFull sprawdza czy slot paska jest pełny (4 mikstury)
+func (b Belt) IsSlotFull(slot int) bool {
+	return b.GetPotionCountInSlot(slot) >= 4
+}
+
+// GetLowestRowInSlot zwraca najniższy (najmniejszy Y) rząd zajęty w slocie
+// Przydatne do znajdowania "dna" stosu mikstur
+func (b Belt) GetLowestRowInSlot(slot int) int {
+	lowestRow := -1
+	for _, item := range b.Items {
+		if item.Position.X == slot {
+			if lowestRow == -1 || item.Position.Y < lowestRow {
+				lowestRow = item.Position.Y
+			}
+		}
+	}
+	return lowestRow
+}
+
+// GetHighestRowInSlot zwraca najwyższy (największy Y) rząd zajęty w slocie
+func (b Belt) GetHighestRowInSlot(slot int) int {
+	highestRow := -1
+	for _, item := range b.Items {
+		if item.Position.X == slot {
+			if item.Position.Y > highestRow {
+				highestRow = item.Position.Y
+			}
+		}
+	}
+	return highestRow
 }

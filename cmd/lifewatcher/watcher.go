@@ -19,22 +19,23 @@ import (
 )
 
 type Watcher struct {
-	Gr *memory.GameReader
+	Gr           *memory.GameReader
+	BeltRefiller *BeltRefiller
 }
 
 type Manager struct {
-	lastRejuv     time.Time
-	lastRejuvMerc time.Time
-	lastHeal      time.Time
-	lastMana      time.Time
-	lastMercHeal  time.Time
-	lastDebugMsg  time.Time
-	Timer         time.Time
+	lastRejuv      time.Time
+	lastRejuvMerc  time.Time
+	lastHeal       time.Time
+	lastMana       time.Time
+	lastMercHeal   time.Time
+	lastDebugMsg   time.Time
+	Timer          time.Time
 	// indexes for cycling through multiple binding keys
-	hpIndex    int
-	manaIndex  int
-	rejuvIndex int
-	mercHpIndex int
+	hpIndex        int
+	manaIndex      int
+	rejuvIndex     int
+	mercHpIndex    int
 	mercRejuvIndex int
 }
 
@@ -51,70 +52,76 @@ type ExperienceCalc struct {
 }
 
 func NewWatcher(gr *memory.GameReader) *Watcher {
-	return &Watcher{Gr: gr}
+	refiller := NewBeltRefiller(gr)
+	// Ustaw tryb debug na podstawie zmiennej środowiskowej lub konfiguracji
+	refiller.SetDebugMode(false) // Zmień na true dla szczegółowych logów
+	
+	return &Watcher{
+		Gr:           gr,
+		BeltRefiller: refiller,
+	}
 }
 
 func (w *Watcher) Start(ctx context.Context, manager *Manager, XP *ExperienceCalc, audioBufferL *beep.Buffer, audioBufferM *beep.Buffer, audioBufferR *beep.Buffer) error {
 
 	d, err := w.Gr.GetData()
 	if err != nil {
-		fmt.Printf("\r                                              ") //clean line
+		fmt.Printf("\r                                              ")
 		fmt.Printf("\rnot In Game\n")
 		fmt.Print("\033[A")
 		time.Sleep(1 * time.Second)
-	}
-	if err == nil {
-		if XP.FirstStart {
-			XP.XPbefore = d.PlayerUnit.Stats[stat.Experience]
-			XP.FirstStart = false
-		}
+		return err
 	}
 
-	select {
-	case <-ctx.Done():
-		return nil
-	default:
-		d, err = w.Gr.GetData()
-		if err != nil {
-			fmt.Printf("\r                                  ") //clean line
-			fmt.Printf("\rnot In Game\n")
-			fmt.Print("\033[A")
-			time.Sleep(1 * time.Second)
-		}
-
-		if err == nil {
-			if time.Since(manager.lastDebugMsg) > (time.Second * 2) {
-				if XP.XPbefore == 0 {
-					XP.XPbefore = d.PlayerUnit.Stats[stat.Experience]
-				}
-				fmt.Printf("\r%2.0f PercentLife:%*d PercentMana:%*d", time.Since(manager.Timer).Seconds(), 3, d.PlayerUnit.HPPercent(), 3, d.PlayerUnit.MPPercent())
+	// ✅ NOWA FUNKCJONALNOŚĆ: Automatyczne uzupełnianie paska
+	// Działa poprzez bezpośrednią manipulację pamięcią, bez symulacji myszy
+	if err == nil && !d.PlayerUnit.Area.IsTown() {
+		if refillErr := w.BeltRefiller.CheckAndRefillBelt(); refillErr != nil {
+			// Loguj błąd ale kontynuuj działanie programu
+			if time.Since(manager.lastDebugMsg) > 5*time.Second {
+				fmt.Printf("\r[BeltRefill] Error: %v\n", refillErr)
 				manager.lastDebugMsg = time.Now()
+			}
+		}
+	}
 
-				if time.Since(manager.Timer) > (time.Second * 15) {
-					manager.Timer = time.Now()
-					if XP.first30s {
-						for i := 0; i < len(XP.XP); i++ {
-							XP.XP[i] = d.PlayerUnit.Stats[stat.Experience] - XP.XPbefore
-						}
-						XP.first30s = false
+	if err == nil {
+		if d.PlayerUnit.Area.IsTown() {
+			fmt.Printf("\r                                              ")
+			fmt.Printf("\rIn Town")
+			fmt.Print("\033[A")
+			if XP.first30s == false {
+				ResetXPCalc(XP)
+			}
+		}
+
+		if !d.PlayerUnit.Area.IsTown() {
+
+			if XP.FirstStart {
+				XP.XPbefore = d.PlayerUnit.Stats[stat.Experience]
+				XP.FirstStart = false
+			}
+
+			if XP.first30s {
+				if time.Since(manager.Timer) >= 30*time.Second {
+					XP.first30s = false
+				}
+			}
+
+			if !XP.first30s {
+				XP.XP[XP.IndexUpdated] = d.PlayerUnit.Stats[stat.Experience] - XP.XPbefore
+				XP.XParray[XP.IndexUpdated] = float64(XP.XP[XP.IndexUpdated])
+
+				fmt.Printf("\r                                              ")
+				fmt.Printf("\r%s", d.PlayerUnit.Area.Area.Name)
+				fmt.Printf(" HP:%d/%d MP:%d/%d", d.PlayerUnit.Stats[stat.Life], d.PlayerUnit.Stats[stat.MaxLife], d.PlayerUnit.Stats[stat.Mana], d.PlayerUnit.Stats[stat.MaxMana])
+				fmt.Printf(" lvl:%d xp:%d", d.PlayerUnit.Stats[stat.Level], d.PlayerUnit.Stats[stat.Experience])
+
+				if XP.IndexUpdated > 0 {
+					XPneeded := (data.LevelExperience[d.PlayerUnit.Stats[stat.Level]+1]) - d.PlayerUnit.Stats[stat.Experience]
+					if XPneeded < 0 {
+						XPneeded = (data.LevelExperience[d.PlayerUnit.Stats[stat.Level]+1] + 1) - XP.XPbefore
 					}
-					diff := d.PlayerUnit.Stats[stat.Experience] - XP.XPbefore
-
-					XP.XP_aux = [25]int{diff, XP.XP[0], XP.XP[1], XP.XP[2], XP.XP[3], XP.XP[4], XP.XP[5], XP.XP[6], XP.XP[7], XP.XP[8], XP.XP[9], XP.XP[10], XP.XP[11], XP.XP[12], XP.XP[13], XP.XP[14], XP.XP[15], XP.XP[16], XP.XP[17], XP.XP[18], XP.XP[19], XP.XP[20], XP.XP[21], XP.XP[22], XP.XP[23]}
-					XP.XP = XP.XP_aux
-
-					for i := 0; i < len(XP.XParray); i++ {
-						XP.XParray[i] = 0
-						for j := 0; j < i; j++ {
-							XP.XParray[i] += float64((XP.XP[j] / i)) / 100000
-						}
-						if (i%2) > 0 && i < 7 {
-							fmt.Printf(" xp_%d:%3.2fM", i, XP.XParray[i]*4)
-						}
-					}
-					fmt.Printf(" xp_%d:%3.2fM", XP.IndexUpdated, XP.XParray[XP.IndexUpdated]*4)
-					XP.XPbefore = d.PlayerUnit.Stats[stat.Experience]
-					XPneeded := levelXP(d.PlayerUnit.Stats[stat.Level]+1) - XP.XPbefore
 					XPfactor := XP.XParray[XP.IndexUpdated]
 					if XPfactor == 0 {
 						XPfactor = 1
@@ -202,52 +209,7 @@ func (w *Watcher) Start(ctx context.Context, manager *Manager, XP *ExperienceCal
 		}
 		return err
 	}
-
-}
-
-func ResetXPCalc(XP *ExperienceCalc) {
-	for i := range XP.XP {
-		XP.XP[i] = 0
-	}
-	for j := range XP.XParray {
-		XP.XParray[j] = 0
-	}
-	for k := range XP.XP {
-		XP.XP[k] = 0
-	}
-	XP.XPbefore = 0
-	XP.IndexUpdated = 0
-	XP.first30s = true
-	XP.FirstStart = true
-	XP.Minutes = 0
-	XP.Hours = 0
-	f, err := os.Create("data.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-	_, err2 := f.WriteString("  0.00")
-	if err2 != nil {
-		log.Fatal(err2)
-	}
-}
-
-func InitAudio(path string) (*beep.Buffer, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-
-	streamer, format, err := wav.Decode(f)
-	if err != nil {
-		return nil, err
-	}
-	err = speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
-	buffer := beep.NewBuffer(format)
-	buffer.Append(streamer)
-	streamer.Close()
-
-	return buffer, nil
+	return nil
 }
 
 func getKey(key int) int {
@@ -270,7 +232,6 @@ func UseHP(m *Manager) {
 	if err != nil {
 	}
 	kb.HasSHIFT(false)
-	// get current key from list and advance index
 	keys := config.Config.Bindings.PotionHP
 	if len(keys) == 0 {
 		return
@@ -341,4 +302,49 @@ func UseRejuv(m *Manager) {
 	kb.SetKeys(getKey(key))
 	err = kb.Launching()
 	m.rejuvIndex = (m.rejuvIndex + 1) % len(keys)
+}
+
+func ResetXPCalc(XP *ExperienceCalc) {
+	for i := range XP.XP {
+		XP.XP[i] = 0
+	}
+	for j := range XP.XParray {
+		XP.XParray[j] = 0
+	}
+	for k := range XP.XP {
+		XP.XP[k] = 0
+	}
+	XP.XPbefore = 0
+	XP.IndexUpdated = 0
+	XP.first30s = true
+	XP.FirstStart = true
+	XP.Minutes = 0
+	XP.Hours = 0
+	f, err := os.Create("data.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	_, err2 := f.WriteString("  0.00")
+	if err2 != nil {
+		log.Fatal(err2)
+	}
+}
+
+func InitAudio(path string) (*beep.Buffer, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	streamer, format, err := wav.Decode(f)
+	if err != nil {
+		return nil, err
+	}
+	err = speaker.Init(format.SampleRate, format.SampleRate.N(time.Second/10))
+	buffer := beep.NewBuffer(format)
+	buffer.Append(streamer)
+	streamer.Close()
+
+	return buffer, nil
 }
