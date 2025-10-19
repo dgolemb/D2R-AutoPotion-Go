@@ -22,3 +22,8 @@ beltRefill:
   enabled: true
   checkInterval: 4     # Co ile sekund sprawdzać pasek
   minPotionsInSlot: 2  # Minimalna liczba mikstur w slocie przed uzupełnieniem
+
+debug:
+  enabled: false  # Ustaw true aby włączyć szczegółowe logi
+  showMemoryDetails: false  # Dodatkowe szczegóły pamięci
+  showGameData: false  # Logi GetData()
