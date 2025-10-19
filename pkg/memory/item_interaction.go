@@ -8,7 +8,6 @@ import (
 
 	"github.com/Hefero/D2R-AutoPotion-Go/pkg/data"
 	"github.com/Hefero/D2R-AutoPotion-Go/pkg/data/item"
-	"golang.org/x/sys/windows"
 )
 
 var (
@@ -37,9 +36,7 @@ const (
 )
 
 // Struktury dla SendInput
-type POINT struct {
-	X, Y int32
-}
+// UWAGA: POINT jest już zdefiniowany w screen_resolution.go, więc go tutaj nie definiujemy
 
 type MOUSEINPUT struct {
 	dx          int32
@@ -158,7 +155,7 @@ func (ii *ItemInteraction) MovePotionToBelt(itm data.Item, beltSlot int, targetR
 	return nil
 }
 
-// GridToScreenCoordinates - DEPRECATED, użyj uiCoordinates.GetInventoryCoordinates()
+// GridToScreenCoordinates - używa automatycznego skalowania
 func (ii *ItemInteraction) GridToScreenCoordinates(gridPos data.Position) (int, int) {
 	return ii.uiCoordinates.GetInventoryCoordinates(gridPos.X, gridPos.Y)
 }
@@ -346,5 +343,51 @@ func (ii *ItemInteraction) PressKey(vkCode uint16) error {
 		return fmt.Errorf("failed to send key up")
 	}
 
+	return nil
+}
+
+// ========== METODY BACKWARD COMPATIBILITY (stare API) ==========
+
+// MoveMouse przesuwa kursor myszy na podane współrzędne
+func (ii *ItemInteraction) MoveMouse(x, y int) {
+	procSetCursorPos.Call(uintptr(x), uintptr(y))
+}
+
+// SimulateLeftClick symuluje kliknięcie lewym przyciskiem myszy
+func (ii *ItemInteraction) SimulateLeftClick(x, y int) error {
+	return ii.ClickAt(x, y)
+}
+
+// SimulateShiftLeftClick symuluje Shift + kliknięcie lewym przyciskiem myszy
+func (ii *ItemInteraction) SimulateShiftLeftClick(x, y int) error {
+	ii.MoveMouse(x, y)
+	time.Sleep(50 * time.Millisecond)
+	
+	var inputs [4]INPUT
+	
+	// Shift down
+	inputs[0].dwType = INPUT_KEYBOARD
+	shiftDown := (*KEYBDINPUT)(unsafe.Pointer(&inputs[0].union[0]))
+	shiftDown.wVk = VK_SHIFT
+	shiftDown.dwFlags = KEYEVENTF_KEYDOWN
+	
+	// Mouse down
+	inputs[1].dwType = INPUT_MOUSE
+	mouseDown := (*MOUSEINPUT)(unsafe.Pointer(&inputs[1].union[0]))
+	mouseDown.dwFlags = MOUSEEVENTF_LEFTDOWN
+	
+	// Mouse up
+	inputs[2].dwType = INPUT_MOUSE
+	mouseUp := (*MOUSEINPUT)(unsafe.Pointer(&inputs[2].union[0]))
+	mouseUp.dwFlags = MOUSEEVENTF_LEFTUP
+	
+	// Shift up
+	inputs[3].dwType = INPUT_KEYBOARD
+	shiftUp := (*KEYBDINPUT)(unsafe.Pointer(&inputs[3].union[0]))
+	shiftUp.wVk = VK_SHIFT
+	shiftUp.dwFlags = KEYEVENTF_KEYUP
+	
+	procSendInput.Call(4, uintptr(unsafe.Pointer(&inputs[0])), unsafe.Sizeof(inputs[0]))
+	
 	return nil
 }
