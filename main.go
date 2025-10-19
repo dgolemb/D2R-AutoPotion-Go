@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/Hefero/D2R-AutoPotion-Go/cmd/config"
 	"github.com/Hefero/D2R-AutoPotion-Go/cmd/lifewatcher"
+	"github.com/Hefero/D2R-AutoPotion-Go/pkg/data/item"
 	"github.com/Hefero/D2R-AutoPotion-Go/pkg/memory"
 	"github.com/faiface/beep"
 )
