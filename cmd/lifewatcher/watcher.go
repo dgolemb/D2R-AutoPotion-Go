@@ -52,7 +52,7 @@ type ExperienceCalc struct {
 
 func NewWatcher(gr *memory.GameReader) *Watcher {
 	refiller := NewBeltRefiller(gr)
-	refiller.SetDebugMode(config.Config.Debug.Enabled) // ✅ Z config
+	refiller.SetDebugMode(config.Config.Debug.Enabled)
 	
 	return &Watcher{
 		Gr:           gr,
@@ -72,25 +72,22 @@ func (w *Watcher) Start(ctx context.Context, manager *Manager, XP *ExperienceCal
 		fmt.Printf("\rnot In Game\n")
 		fmt.Print("\033[A")
 		time.Sleep(1 * time.Second)
-		return err // ✅ DODANE: return aby nie używać niezdefiniowanych zmiennych
+		return err
 	}
 	
 	if config.Config.Debug.ShowGameData {
-		fmt.Printf("[DEBUG] Successfully got game data! PlayerUnit area: %d\n", d.PlayerUnit.Area.Area)
+		fmt.Printf("[DEBUG] Successfully got game data! PlayerUnit area: %d\n", d.PlayerUnit.Area)
 	}
 
 	// Sprawdzanie i uzupełnianie paska (tylko poza miastem)
 	if !d.PlayerUnit.Area.IsTown() {
 		if refillErr := w.BeltRefiller.CheckAndRefillBelt(); refillErr != nil {
-			// Loguj błąd ale kontynuuj działanie programu
 			if config.Config.Debug.Enabled {
 				fmt.Printf("Belt refill error: %v\n", refillErr)
 			}
 		}
 	}
 
-	// Reszta oryginalnej logiki watchera...
-	
 	if time.Since(manager.lastDebugMsg) > (time.Second * 2) {
 		fmt.Printf("\r                                                                         ")
 		fmt.Printf("\r%2d PercentLife: %2d PercentMana:%3d", d.PlayerUnit.Stats[stat.Level], d.PlayerUnit.HPPercent(), d.PlayerUnit.MPPercent())
@@ -180,14 +177,16 @@ func (w *Watcher) Start(ctx context.Context, manager *Manager, XP *ExperienceCal
 			}
 		}
 
-		// Merc healing
-		if d.Roster.GetMercenary().HPPercent() <= config.Config.Health.MercHealingPotionAt && time.Since(manager.lastMercHeal) > (time.Duration(config.Config.Timings.HealingMercInterval)*time.Second) {
+		// Merc healing - używamy d.MercHPPercent()
+		mercHPPercent := d.MercHPPercent()
+		
+		if mercHPPercent > 0 && mercHPPercent <= config.Config.Health.MercHealingPotionAt && time.Since(manager.lastMercHeal) > (time.Duration(config.Config.Timings.HealingMercInterval)*time.Second) {
 			UseHPMerc(manager)
 			manager.lastMercHeal = time.Now()
 			speaker.Play(audioBufferL.Streamer(0, audioBufferL.Len()))
 		}
 
-		if d.Roster.GetMercenary().HPPercent() <= config.Config.Health.MercRejuvPotionAt && time.Since(manager.lastRejuvMerc) > (time.Duration(config.Config.Timings.RejuvInterval)*time.Second) {
+		if mercHPPercent > 0 && mercHPPercent <= config.Config.Health.MercRejuvPotionAt && time.Since(manager.lastRejuvMerc) > (time.Duration(config.Config.Timings.RejuvInterval)*time.Second) {
 			UseMercRejuv(manager)
 			manager.lastRejuvMerc = time.Now()
 			speaker.Play(audioBufferR.Streamer(0, audioBufferR.Len()))
@@ -316,4 +315,25 @@ func UseRejuv(m *Manager) {
 	kb.SetKeys(getKey(key))
 	err = kb.Launching()
 	m.rejuvIndex = (m.rejuvIndex + 1) % len(keys)
+}
+
+func ResetXPCalc(XP *ExperienceCalc) {
+	*XP = ExperienceCalc{}
+}
+
+// levelXP zwraca wymagane XP dla osiągnięcia danego poziomu
+func levelXP(lvl int) int {
+	xpTable := map[int]int{
+		70: 285041630, 71: 311105466, 72: 339515048, 73: 370481492, 74: 404234916,
+		75: 441026148, 76: 481128591, 77: 524840254, 78: 572485967, 79: 624419793,
+		80: 681027665, 81: 742730244, 82: 809986056, 83: 883294891, 84: 963201521,
+		85: 1050299747, 86: 1145236814, 87: 1248718217, 88: 1361512946, 89: 1484459201,
+		90: 1618470619, 91: 1764543065, 92: 1923762030, 93: 2097310703, 94: 2286478756,
+		95: 2492671933, 96: 2717422497, 97: 2962400612, 98: 3229426756, 99: 3520485254,
+	}
+	
+	if xp, found := xpTable[lvl]; found {
+		return xp
+	}
+	return 0
 }
