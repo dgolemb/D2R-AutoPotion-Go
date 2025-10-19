@@ -7,6 +7,27 @@ import (
 	"github.com/Hefero/D2R-AutoPotion-Go/pkg/data/stat"
 )
 
+// ID przedmiotów (TXT File No) z items.txt - identyczne we wszystkich wersjach językowych!
+const (
+	// Healing Potions
+	MinorHealingPotionID   = 586
+	LightHealingPotionID   = 587
+	HealingPotionID        = 588
+	GreaterHealingPotionID = 589
+	SuperHealingPotionID   = 590
+	
+	// Mana Potions
+	MinorManaPotionID   = 591
+	LightManaPotionID   = 592
+	ManaPotionID        = 593
+	GreaterManaPotionID = 594
+	SuperManaPotionID   = 595
+	
+	// Rejuvenation Potions
+	RejuvenationPotionID     = 515
+	FullRejuvenationPotionID = 516
+)
+
 type Items struct {
 	Belt     Belt
 	AllItems []Item
@@ -57,6 +78,7 @@ type Item struct {
 	IsHovered  bool
 	Stats      map[stat.ID]stat.Data
 	Identified bool
+	TxtFileNo  uint // ID przedmiotu z items.txt (niezależne od języka!)
 }
 
 func (i Item) Type() string {
@@ -69,37 +91,19 @@ func (i Item) IsPotion() bool {
 	return i.IsHealingPotion() || i.IsManaPotion() || i.IsRejuvPotion()
 }
 
-// IsHealingPotion sprawdza czy przedmiot jest miksturą zdrowia
+// IsHealingPotion - rozpoznawanie po TXT File No zamiast nazwy (działa w każdej wersji językowej!)
 func (i Item) IsHealingPotion() bool {
-	nameLower := strings.ToLower(string(i.Name))
-	return strings.Contains(nameLower, "healingpotion") ||
-		strings.Contains(nameLower, "healing potion") ||
-		string(i.Name) == "MinorHealingPotion" ||
-		string(i.Name) == "LightHealingPotion" ||
-		string(i.Name) == "HealingPotion" ||
-		string(i.Name) == "GreaterHealingPotion" ||
-		string(i.Name) == "SuperHealingPotion"
+	return i.TxtFileNo >= MinorHealingPotionID && i.TxtFileNo <= SuperHealingPotionID
 }
 
-// IsManaPotion sprawdza czy przedmiot jest miksturą many
+// IsManaPotion - rozpoznawanie po TXT File No zamiast nazwy (działa w każdej wersji językowej!)
 func (i Item) IsManaPotion() bool {
-	nameLower := strings.ToLower(string(i.Name))
-	return strings.Contains(nameLower, "manapotion") ||
-		strings.Contains(nameLower, "mana potion") ||
-		string(i.Name) == "MinorManaPotion" ||
-		string(i.Name) == "LightManaPotion" ||
-		string(i.Name) == "ManaPotion" ||
-		string(i.Name) == "GreaterManaPotion" ||
-		string(i.Name) == "SuperManaPotion"
+	return i.TxtFileNo >= MinorManaPotionID && i.TxtFileNo <= SuperManaPotionID
 }
 
-// IsRejuvPotion sprawdza czy przedmiot jest miksturą odnowy (rejuvenation)
+// IsRejuvPotion - rozpoznawanie po TXT File No zamiast nazwy (działa w każdej wersji językowej!)
 func (i Item) IsRejuvPotion() bool {
-	nameLower := strings.ToLower(string(i.Name))
-	return strings.Contains(nameLower, "rejuv") ||
-		strings.Contains(nameLower, "rejuvenation") ||
-		string(i.Name) == "RejuvenationPotion" ||
-		string(i.Name) == "FullRejuvenationPotion"
+	return i.TxtFileNo == RejuvenationPotionID || i.TxtFileNo == FullRejuvenationPotionID
 }
 
 func (i Item) IsFromQuest() bool {
