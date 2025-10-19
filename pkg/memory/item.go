@@ -70,7 +70,7 @@ func (gd *GameReader) Items(pu data.PlayerUnit, hover data.HoverData) data.Items
 				},
 				IsHovered: itemHovered,
 				Stats:     stats,
-				TxtFileNo: uint(txtFileNo), // ✅ DODAJ TĘ LINIĘ!
+				TxtFileNo: uint(txtFileNo), // ✅ DODAJ TĘ JEDNĄ LINIĘ!
 			}
 			setProperties(&itm, uint32(flags))
 

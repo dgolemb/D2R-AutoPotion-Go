@@ -53,7 +53,7 @@ type ExperienceCalc struct {
 
 func NewWatcher(gr *memory.GameReader) *Watcher {
 	refiller := NewBeltRefiller(gr)
-	refiller.SetDebugMode(true) // Zmień na true dla debugowania
+	refiller.SetDebugMode(config.Config.Debug.Enabled) // Zmień na true dla debugowania
 	
 	return &Watcher{
 		Gr:           gr,
@@ -63,19 +63,20 @@ func NewWatcher(gr *memory.GameReader) *Watcher {
 
 func (w *Watcher) Start(ctx context.Context, manager *Manager, XP *ExperienceCalc, audioBufferL *beep.Buffer, audioBufferM *beep.Buffer, audioBufferR *beep.Buffer) error {
 	
-	fmt.Printf("[DEBUG] Attempting to get game data...\n")
-	
-	d, err := w.Gr.GetData()
-	if err != nil {
-		fmt.Printf("[DEBUG] GetData() error: %v\n", err)
-		fmt.Printf("\r                                              ")
-		fmt.Printf("\rnot In Game\n")
-		fmt.Print("\033[A")
-		time.Sleep(1 * time.Second)
-		return err
+	if config.Config.Debug.ShowGameData {
+		fmt.Printf("[DEBUG] Attempting to get game data...\n")
+		
+		d, err := w.Gr.GetData()
+		if err != nil {
+			fmt.Printf("[DEBUG] GetData() error: %v\n", err)
+			fmt.Printf("\r                                              ")
+			fmt.Printf("\rnot In Game\n")
+			fmt.Print("\033[A")
+			time.Sleep(1 * time.Second)
+			return err
+		}
+		fmt.Printf("[DEBUG] Successfully got game data! PlayerUnit area: %v\n", d.PlayerUnit.Area)
 	}
-	
-	fmt.Printf("[DEBUG] Successfully got game data! PlayerUnit area: %v\n", d.PlayerUnit.Area)
 	
 	// Automatyczne uzupełnianie paska
 	if !d.PlayerUnit.Area.IsTown() {

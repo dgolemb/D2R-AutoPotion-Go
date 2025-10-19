@@ -7,25 +7,25 @@ import (
 	"github.com/Hefero/D2R-AutoPotion-Go/pkg/data/stat"
 )
 
-// ID przedmiotów (TXT File No) z items.txt - identyczne we wszystkich wersjach językowych!
+// ✅ POPRAWIONE ID zgodnie z items.txt D2R
 const (
-	// Healing Potions
+	// Rejuvenation Potions (515-516)
+	RejuvenationPotionID     = 515
+	FullRejuvenationPotionID = 516
+	
+	// Healing Potions (586-590)
 	MinorHealingPotionID   = 586
 	LightHealingPotionID   = 587
 	HealingPotionID        = 588
 	GreaterHealingPotionID = 589
 	SuperHealingPotionID   = 590
 	
-	// Mana Potions
+	// Mana Potions (591-595)
 	MinorManaPotionID   = 591
 	LightManaPotionID   = 592
 	ManaPotionID        = 593
 	GreaterManaPotionID = 594
 	SuperManaPotionID   = 595
-	
-	// Rejuvenation Potions
-	RejuvenationPotionID     = 515
-	FullRejuvenationPotionID = 516
 )
 
 type Items struct {
@@ -36,7 +36,6 @@ type Items struct {
 func (i Items) Find(name item.Name, locations ...item.Location) (Item, bool) {
 	for _, it := range i.AllItems {
 		if strings.EqualFold(string(it.Name), string(name)) {
-			// If no locations are specified, return the first item found
 			if len(locations) == 0 {
 				return it, true
 			}
@@ -78,12 +77,11 @@ type Item struct {
 	IsHovered  bool
 	Stats      map[stat.ID]stat.Data
 	Identified bool
-	TxtFileNo  uint // ID przedmiotu z items.txt (niezależne od języka!)
+	TxtFileNo  uint // ✅ DODANE: ID z items.txt
 }
 
 func (i Item) Type() string {
 	t, _ := item.TypeForItemName(string(i.Name))
-
 	return t
 }
 
@@ -91,17 +89,15 @@ func (i Item) IsPotion() bool {
 	return i.IsHealingPotion() || i.IsManaPotion() || i.IsRejuvPotion()
 }
 
-// IsHealingPotion - rozpoznawanie po TXT File No zamiast nazwy (działa w każdej wersji językowej!)
+// ✅ Rozpoznawanie po TxtFileNo - działa niezależnie od języka!
 func (i Item) IsHealingPotion() bool {
 	return i.TxtFileNo >= MinorHealingPotionID && i.TxtFileNo <= SuperHealingPotionID
 }
 
-// IsManaPotion - rozpoznawanie po TXT File No zamiast nazwy (działa w każdej wersji językowej!)
 func (i Item) IsManaPotion() bool {
 	return i.TxtFileNo >= MinorManaPotionID && i.TxtFileNo <= SuperManaPotionID
 }
 
-// IsRejuvPotion - rozpoznawanie po TXT File No zamiast nazwy (działa w każdej wersji językowej!)
 func (i Item) IsRejuvPotion() bool {
 	return i.TxtFileNo == RejuvenationPotionID || i.TxtFileNo == FullRejuvenationPotionID
 }
@@ -112,6 +108,5 @@ func (i Item) IsFromQuest() bool {
 			return true
 		}
 	}
-
 	return false
 }
