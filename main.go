@@ -77,6 +77,18 @@ func main() {
 		widget.NewButton("Reset", func() {
 			lifewatcher.ResetXPCalc(&XP)
 		}),
+		widget.NewButton("Debug Screen Resolution", func() {
+			process, err := memory.NewProcess()
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+				return
+			}
+			gr := memory.NewGameReader(process)
+			interaction := memory.NewItemInteraction(gr)
+			
+			// Wyświetl informacje o rozdzielczości i obliczone współrzędne
+			interaction.DebugUICoordinates()
+		}),
 	))
 
 	w.ShowAndRun()
