@@ -24,18 +24,18 @@ type Watcher struct {
 }
 
 type Manager struct {
-	lastRejuv      time.Time
-	lastRejuvMerc  time.Time
-	lastHeal       time.Time
-	lastMana       time.Time
-	lastMercHeal   time.Time
-	lastDebugMsg   time.Time
-	Timer          time.Time
-	hpIndex        int
-	manaIndex      int
-	rejuvIndex     int
-	mercHpIndex    int
-	mercRejuvIndex int
+	lastRejuv          time.Time
+	lastRejuvMerc      time.Time
+	lastHeal           time.Time
+	lastMana           time.Time
+	lastMercHeal       time.Time
+	lastDebugMsg       time.Time
+	Timer              time.Time
+	hpIndex            int
+	manaIndex          int
+	rejuvIndex         int
+	mercHpIndex        int
+	mercRejuvIndex     int
 }
 
 type ExperienceCalc struct {
@@ -52,7 +52,10 @@ type ExperienceCalc struct {
 
 func NewWatcher(gr *memory.GameReader) *Watcher {
 	refiller := NewBeltRefiller(gr)
-	refiller.SetDebugMode(config.Config.Debug.Enabled)
+	// Wyłącz debug mode domyślnie - można włączyć przez config
+	if config.Config.Debug.Enabled {
+		refiller.SetDebugMode(true)
+	}
 	
 	return &Watcher{
 		Gr:           gr,
@@ -62,146 +65,154 @@ func NewWatcher(gr *memory.GameReader) *Watcher {
 
 func (w *Watcher) Start(ctx context.Context, manager *Manager, XP *ExperienceCalc, audioBufferL *beep.Buffer, audioBufferM *beep.Buffer, audioBufferR *beep.Buffer) error {
 
-	if config.Config.Debug.ShowGameData {
-		fmt.Printf("[DEBUG] Attempting to get game data...\n")
-	}
-	
 	d, err := w.Gr.GetData()
 	if err != nil {
 		fmt.Printf("\r                                              ")
 		fmt.Printf("\rnot In Game\n")
-		fmt.Print("\033[A")
+		// Wyłączone - powoduje nieczytelne logi w niektórych konsolach
+		// fmt.Print("\033[A")
 		time.Sleep(1 * time.Second)
-		return err
+		return nil
 	}
 	
-	if config.Config.Debug.ShowGameData {
-		fmt.Printf("[DEBUG] Successfully got game data! PlayerUnit area: %d\n", d.PlayerUnit.Area)
-	}
-
 	// Sprawdzanie i uzupełnianie paska (tylko poza miastem)
 	if !d.PlayerUnit.Area.IsTown() {
 		if refillErr := w.BeltRefiller.CheckAndRefillBelt(); refillErr != nil {
+			// Log error but continue
 			if config.Config.Debug.Enabled {
 				fmt.Printf("Belt refill error: %v\n", refillErr)
 			}
 		}
 	}
 
-	if time.Since(manager.lastDebugMsg) > (time.Second * 2) {
-		fmt.Printf("\r                                                                         ")
-		fmt.Printf("\r%2d PercentLife: %2d PercentMana:%3d", d.PlayerUnit.Stats[stat.Level], d.PlayerUnit.HPPercent(), d.PlayerUnit.MPPercent())
-		manager.lastDebugMsg = time.Now()
-	}
-
-	// XP tracking
-	if d.PlayerUnit.Stats[stat.Level] < 99 {
-		XP.XP_aux[XP.IndexUpdated] = d.PlayerUnit.Stats[stat.Experience]
-
-		if time.Since(manager.Timer) > (time.Second*30) && XP.first30s {
-			XP.first30s = false
+	if err == nil {
+		// Pozostała część kodu bez zmian...
+		if XP.FirstStart {
 			XP.XPbefore = d.PlayerUnit.Stats[stat.Experience]
+			XP.first30s = true
+			XP.FirstStart = false
 		}
 
-		if time.Since(manager.Timer) > (time.Minute*1) && !XP.FirstStart {
-			if XP.IndexUpdated != 0 {
-				XP.XParray[XP.IndexUpdated] = (float64(XP.XP[XP.IndexUpdated]) - float64(XP.XP[XP.IndexUpdated-1])) / (float64(60))
-			} else {
-				XP.XParray[XP.IndexUpdated] = (float64(XP.XP[XP.IndexUpdated]) - float64(XP.XP[19])) / (float64(60))
-			}
-
-			if XP.IndexUpdated == 19 {
-				XP.IndexUpdated = 0
-			}
-
-			XP.XP[XP.IndexUpdated] = d.PlayerUnit.Stats[stat.Experience]
-
-			XPneeded := levelXP(d.PlayerUnit.Stats[stat.Level]+1) - XP.XPbefore
-			XPfactor := XP.XParray[XP.IndexUpdated]
-			if XPfactor == 0 {
-				XPfactor = 1
-			}
-			XP.Minutes = float64(XPneeded) / float64((XP.XParray[XP.IndexUpdated] * 4 * 100000))
-			XP.Hours = float64(XPneeded) / float64((XP.XParray[XP.IndexUpdated] * 4 * 100000 * 60))
-
-			f, err := os.Create("data.txt")
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer f.Close()
-			duration := time.Duration(time.Duration(XP.Minutes) * time.Minute).Round(time.Minute).String()
-			durationTrim := duration[:len(duration)-2]
-			stringWrite := durationTrim + "  " + strconv.FormatFloat(XP.XParray[XP.IndexUpdated], 'f', 2, 64)
-			_, err2 := f.WriteString(stringWrite)
-
-			if err2 != nil {
-				log.Fatal(err2)
-			}
-
-			fmt.Printf(" tnl:%s", stringWrite)
-			if XP.IndexUpdated < 19 {
-				XP.IndexUpdated++
-			}
-		}
-		fmt.Print("\n\033[A")
-	}
-
-	if !d.PlayerUnit.Area.IsTown() {
-		var healingInterval float32 = config.Config.Timings.HealingInterval
-
-		if d.PlayerUnit.States.HasState(state.Poison) {
-			healingInterval += 2
+		if XP.first30s && time.Since(manager.Timer) > (30*time.Second) {
+			XP.XPbefore = d.PlayerUnit.Stats[stat.Experience]
+			XP.first30s = false
 		}
 
-		usedRejuv := false
-		if time.Since(manager.lastRejuv) > (time.Duration(config.Config.Timings.RejuvInterval)*time.Second) && (d.PlayerUnit.HPPercent() <= config.Config.Health.RejuvPotionAtLife || d.PlayerUnit.MPPercent() < config.Config.Health.RejuvPotionAtMana) {
-			UseRejuv(manager)
-			usedRejuv = true
-			if usedRejuv {
-				manager.lastRejuv = time.Now()
+		percent_hp := d.PlayerUnit.HPPercent()
+		percent_mana := d.PlayerUnit.MPPercent()
+		lvl := d.PlayerUnit.Stats[stat.Level]
+
+		//fmt.Printf("%d PercentLife: %d PercentMana:%d\n", lvl, percent_hp, percent_mana)
+		if time.Since(manager.lastDebugMsg) > (3 * time.Second) {
+			// Debug info
+			if config.Config.Debug.ShowGameData {
+				fmt.Printf("%d PercentLife: %d PercentMana:%d\n", lvl, percent_hp, percent_mana)
 			}
-			speaker.Play(audioBufferR.Streamer(0, audioBufferR.Len()))
+			manager.lastDebugMsg = time.Now()
+
+			if !XP.first30s {
+				if XP.IndexUpdated >= 20 {
+					XP.XParray[XP.IndexUpdated%20] = float64(d.PlayerUnit.Stats[stat.Experience]-XP.XPbefore) / 3.0
+				} else {
+					XP.XParray[XP.IndexUpdated] = float64(d.PlayerUnit.Stats[stat.Experience]-XP.XPbefore) / 3.0
+				}
+
+				XPneeded := levelXP(d.PlayerUnit.Stats[stat.Level]+1) - XP.XPbefore
+				XPfactor := XP.XParray[XP.IndexUpdated]
+				if XPfactor == 0 {
+					XPfactor = 1
+				}
+				XP.Minutes = float64(XPneeded) / float64((XP.XParray[XP.IndexUpdated] * 4 * 100000))
+				XP.Hours = float64(XPneeded) / float64((XP.XParray[XP.IndexUpdated] * 4 * 100000 * 60))
+
+				f, err := os.Create("data.txt")
+				if err != nil {
+					log.Fatal(err)
+				}
+				defer f.Close()
+				duration := time.Duration(time.Duration(XP.Minutes) * time.Minute).Round(time.Minute).String()
+				durationTrim := duration[:len(duration)-2]
+				stringWrite := durationTrim + "  " + strconv.FormatFloat(XP.XParray[XP.IndexUpdated], 'f', 2, 64)
+				_, err2 := f.WriteString(stringWrite)
+
+				if err2 != nil {
+					log.Fatal(err2)
+				}
+
+				if config.Config.Debug.ShowGameData {
+					fmt.Printf(" tnl:%s", stringWrite)
+				}
+				if XP.IndexUpdated < 19 {
+					XP.IndexUpdated++
+				}
+			}
+			// Wyłączone - powoduje nieczytelne logi
+			// fmt.Print("\n\033[A")
 		}
 
-		if !usedRejuv {
-			if d.PlayerUnit.HPPercent() <= config.Config.Health.HealingPotionAt && time.Since(manager.lastHeal) > (time.Duration(healingInterval)*time.Second) {
-				UseHP(manager)
-				manager.lastHeal = time.Now()
-				speaker.Play(audioBufferL.Streamer(0, audioBufferL.Len()))
+		if !d.PlayerUnit.Area.IsTown() {
+
+			var healingInterval float32 = config.Config.Timings.HealingInterval
+
+			if d.PlayerUnit.States.HasState(state.Poison) {
+				healingInterval += 2
 			}
 
-			if d.PlayerUnit.MPPercent() <= config.Config.Health.ManaPotionAt && time.Since(manager.lastMana) > (time.Duration(config.Config.Timings.ManaInterval)*time.Second) {
-				UseMana(manager)
-				manager.lastMana = time.Now()
-				speaker.Play(audioBufferM.Streamer(0, audioBufferM.Len()))
+			usedRejuv := false
+			if time.Since(manager.lastRejuv) > (time.Duration(config.Config.Timings.RejuvInterval)*time.Second) && (d.PlayerUnit.HPPercent() <= config.Config.Health.RejuvPotionAtLife || d.PlayerUnit.MPPercent() < config.Config.Health.RejuvPotionAtMana) {
+				UseRejuv(manager)
+				usedRejuv = true
+				if usedRejuv {
+					manager.lastRejuv = time.Now()
+				}
+				speaker.Play(audioBufferR.Streamer(0, audioBufferR.Len()))
+			}
+
+			if !usedRejuv {
+
+				if d.PlayerUnit.HPPercent() <= config.Config.Health.HealingPotionAt && time.Since(manager.lastHeal) > (time.Duration(healingInterval)*time.Second) {
+					UseHP(manager)
+					manager.lastHeal = time.Now()
+					speaker.Play(audioBufferL.Streamer(0, audioBufferL.Len()))
+				}
+
+				if d.PlayerUnit.MPPercent() <= config.Config.Health.ManaPotionAt && time.Since(manager.lastMana) > (time.Duration(config.Config.Timings.ManaInterval)*time.Second) {
+					UseMana(manager)
+					manager.lastMana = time.Now()
+					speaker.Play(audioBufferM.Streamer(0, audioBufferM.Len()))
+				}
+			}
+
+			if config.Config.Merc.Enabled {
+				mercHPPercent := d.MercUnit.HPPercent()
+
+				usedMercRejuv := false
+
+				if time.Since(manager.lastRejuvMerc) > (time.Duration(config.Config.Timings.RejuvInterval)*time.Second) && mercHPPercent <= config.Config.Merc.RejuvPotionAt && mercHPPercent > 0 {
+					UseMercRejuv(manager)
+					usedMercRejuv = true
+					if usedMercRejuv {
+						manager.lastRejuvMerc = time.Now()
+					}
+					speaker.Play(audioBufferR.Streamer(0, audioBufferR.Len()))
+				}
+
+				if !usedMercRejuv {
+					if mercHPPercent <= config.Config.Merc.HealingPotionAt && time.Since(manager.lastMercHeal) > (time.Duration(healingInterval)*time.Second) && mercHPPercent > 0 {
+						UseHPMerc(manager)
+						manager.lastMercHeal = time.Now()
+						speaker.Play(audioBufferL.Streamer(0, audioBufferL.Len()))
+					}
+				}
 			}
 		}
-
-		// Merc healing - używamy d.MercHPPercent()
-		mercHPPercent := d.MercHPPercent()
-		
-		if mercHPPercent > 0 && mercHPPercent <= config.Config.Health.MercHealingPotionAt && time.Since(manager.lastMercHeal) > (time.Duration(config.Config.Timings.HealingMercInterval)*time.Second) {
-			UseHPMerc(manager)
-			manager.lastMercHeal = time.Now()
-			speaker.Play(audioBufferL.Streamer(0, audioBufferL.Len()))
-		}
-
-		if mercHPPercent > 0 && mercHPPercent <= config.Config.Health.MercRejuvPotionAt && time.Since(manager.lastRejuvMerc) > (time.Duration(config.Config.Timings.RejuvInterval)*time.Second) {
-			UseMercRejuv(manager)
-			manager.lastRejuvMerc = time.Now()
-			speaker.Play(audioBufferR.Streamer(0, audioBufferR.Len()))
-		}
-	}
-
-	if XP.FirstStart && time.Since(manager.Timer) > (time.Second*30) {
-		XP.FirstStart = false
 	}
 
 	return nil
 }
 
-func InitAudio(filename string) (*beep.Buffer, error) {
-	f, err := os.Open(filename)
+func InitAudio(filePath string) (*beep.Buffer, error) {
+	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +249,6 @@ func getKey(key int) int {
 func UseHP(m *Manager) {
 	kb, err := keybd_event.NewKeyBonding()
 	if err != nil {
-		return
 	}
 	kb.HasSHIFT(false)
 	keys := config.Config.Bindings.PotionHP
@@ -254,7 +264,6 @@ func UseHP(m *Manager) {
 func UseMana(m *Manager) {
 	kb, err := keybd_event.NewKeyBonding()
 	if err != nil {
-		return
 	}
 	kb.HasSHIFT(false)
 	keys := config.Config.Bindings.PotionMANA
@@ -270,7 +279,6 @@ func UseMana(m *Manager) {
 func UseHPMerc(m *Manager) {
 	kb, err := keybd_event.NewKeyBonding()
 	if err != nil {
-		return
 	}
 	kb.HasSHIFT(true)
 	keys := config.Config.Bindings.PotionHP
@@ -287,7 +295,6 @@ func UseHPMerc(m *Manager) {
 func UseMercRejuv(m *Manager) {
 	kb, err := keybd_event.NewKeyBonding()
 	if err != nil {
-		return
 	}
 	kb.HasSHIFT(true)
 	keys := config.Config.Bindings.PotionREJUV
@@ -304,7 +311,6 @@ func UseMercRejuv(m *Manager) {
 func UseRejuv(m *Manager) {
 	kb, err := keybd_event.NewKeyBonding()
 	if err != nil {
-		return
 	}
 	kb.HasSHIFT(false)
 	keys := config.Config.Bindings.PotionREJUV
@@ -318,5 +324,5 @@ func UseRejuv(m *Manager) {
 }
 
 func ResetXPCalc(XP *ExperienceCalc) {
-	*XP = ExperienceCalc{}
+	XP.FirstStart = true
 }
